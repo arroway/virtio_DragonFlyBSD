@@ -1,5 +1,8 @@
 /* NOTES
  *
+ * virtio_probe()
+ *
+ * **
  * virtio_alloc_vq()
  * virtio_attach()
  *
@@ -233,8 +236,7 @@ virtio_alloc_vq(struct virtio_softc *sc,
      *   tion.
 	 *   These functions will never fail.
 	 */
-	/*? pourquoi ne pas copier directement index dans vq_size ?
-	 * --> protection de données ? */
+
 
 
 	bus_space_write_2(sc->sc_iot, sc->sc_ioh,
@@ -867,8 +869,9 @@ static int virtio_probe(device_t dev)
 	u_int32_t id = pci_get_device(dev);
 	kprintf("%s %d",__FUNCTION__,id);
 	if (id >= 0x1000  && id <= 0x103f){
-//debug
+		//debug
 		kprintf("Device id %d is accepted", id); 
+
 		return 0;
 	}
 	
@@ -933,15 +936,35 @@ virtio_intr(void *arg)
 
 static int virtio_attach(device_t dev)
 {
-//debug
+    //debug
 	kprintf("We enter virtio_attach");
+
 	//struct virtio_softc *
+
+	/*!
+	 * void * device_get_softc(device_t dev);
+     * Return the driver-specific state of dev.  The softc is automatically
+     * allocated the first time it is requested.
+     *
+     * The pointer to the driver-specific instance variable is returned.
+     *
+	 */
+
 	sc = device_get_softc(dev);
 	int rid, error;
 	device_t child;
 	sc->dev = dev;
 	int virtio_type;
+
+	/*? PCI_MAPS */
+
 	rid = PCIR_BAR(0);
+
+	/*!
+	 * struct resource *
+     * bus_alloc_resource(device_t dev, int type, int *rid, u_long start,
+	 * u_long end, u_long count, u_int flags);
+	 */
     sc->io = bus_alloc_resource(dev, SYS_RES_IOPORT, &rid,
             0, ~0, 1, RF_ACTIVE);
     if (!sc->io) {
