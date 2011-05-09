@@ -1,3 +1,11 @@
+/* NOTES
+ *
+ * virtio_alloc_vq()
+ * virtio_attach()
+ *
+ */
+
+
 /*	$NetBSD$	*/
 
 /*
@@ -212,6 +220,23 @@ virtio_alloc_vq(struct virtio_softc *sc,
 	debug("ind:%d, %d %d\n",index,(unsigned int)sc->sc_iot, (unsigned int)sc->sc_ioh);
 	memset(vq, 0, sizeof(*vq));
 
+
+	/*!  bus_space_write_2(space, handle, offset, value)
+	 *   The bus_space_write_N() family of functions writes a 1, 2, 4, or 8 byte
+	 *   data item to the offset specified by offset into the region specified by
+	 *   handle of the bus space specified by space. The location being written
+	 *   must lie within the bus space region specified by handle.
+	 *
+	 *   Write operations done by the bus_space_write_N() functions may be exe-
+     *   cuted out of order with respect to other pending read and write opera-
+     *   tions unless order is enforced by use of the bus_space_barrier() func-
+     *   tion.
+	 *   These functions will never fail.
+	 */
+	/*? pourquoi ne pas copier directement index dans vq_size ?
+	 * --> protection de données ? */
+
+
 	bus_space_write_2(sc->sc_iot, sc->sc_ioh,
 			  VIRTIO_CONFIG_QUEUE_SELECT, index);
 	vq_size = bus_space_read_2(sc->sc_iot, sc->sc_ioh,
@@ -220,6 +245,11 @@ virtio_alloc_vq(struct virtio_softc *sc,
 		panic( "virtqueue not exist, index %d for %s\n",
 				 index, name);
 	}
+
+	/*! #define VIRTIO_PAGE_SIZE	(4096)
+	 *  #define VIRTQUEUE_ALIGN(n)	(((n)+(VIRTIO_PAGE_SIZE-1))& ~(VIRTIO_PAGE_SIZE-1))
+	 */
+
 
 	/* allocsize1: descriptor table + avail ring + pad */
 	allocsize1 = VIRTQUEUE_ALIGN(sizeof(struct vring_desc)*vq_size
@@ -236,11 +266,103 @@ virtio_alloc_vq(struct virtio_softc *sc,
 	debug("a1:%d a2:%d a3:%d a4:%d\n",
 			allocsize1, allocsize2,allocsize3, allocsize);
 
+
+	/*!  (freebsd man)
+	 *   bus_dma_tag_t
+              A machine-dependent (MD) opaque type that describes the charac-
+              teristics of DMA transactions.  DMA tags are organized into a
+              hierarchy, with each child tag inheriting the restrictions of
+              its parent.  This allows all devices along the path of DMA
+              transactions to contribute to the constraints of those transac-
+              tions.
+	 *   bus_dma_tag_t virtio_dmat;
+	 */
+
 	int error;
 	if (sc->virtio_dmat== NULL){
 		kprintf("dmat is null\n");
 		return 1;
 	}
+
+	/*!
+	 *
+	 *
+	 * bus_dma_tag_create(parent, alignment, boundary, lowaddr, highaddr,
+              *filtfunc, *filtfuncarg, maxsize, nsegments, maxsegsz, flags,
+              *dmat)
+              Allocates a device specific DMA tag, and initializes it accord-
+              ing to the arguments provided:
+              parent        Indicates restrictions between the parent bridge,
+                            CPU memory, and the device.  May be NULL, if no
+                            DMA restrictions are to be inherited.
+              alignment     Alignment constraint, in bytes, of any mappings
+                            created using this tag.  The alignment must be a
+                            power of 2.  Hardware that can DMA starting at any
+                            address would specify 1 for byte alignment.  Hard-
+                            ware requiring DMA transfers to start on a multi-
+                            ple of 4K would specify 4096.
+
+      /*? valeur d'alignment = VIRTIO_PAGE_SIZE = 4096 ?
+
+              boundary      Boundary constraint, in bytes, of the target DMA
+                            memory region.  The boundary indicates the set of
+                            addresses, all multiples of the boundary argument,
+                            that cannot be crossed by a single
+                            bus_dma_segment_t.  The boundary must be either a
+                            power of 2 or 0.  `0' indicates that there are no
+                            boundary restrictions.
+              lowaddr
+              highaddr      Bounds of the window of bus address space that
+                            cannot be directly accessed by the device.  The
+                            window contains all address greater than lowaddr
+                            and less than or equal to highaddr.  For example,
+                            a device incapable of DMA above 4GB, would specify
+                            a highaddr of BUS_SPACE_MAXADDR and a lowaddr of
+                            BUS_SPACE_MAXADDR_32BIT.  Similarly a device that
+                            can only dma to addresses bellow 16MB would spec-
+                            ify a highaddr of BUS_SPACE_MAXADDR and a lowaddr
+                            of BUS_SPACE_MAXADDR_24BIT.  Some implementations
+                            requires that some region of device visible
+                            address space, overlapping available host memory,
+                            be outside the window.  This area of `safe memory'
+                            is used to bounce requests that would otherwise
+                            conflict with the exclusion window.
+
+        /*? ici, lowaddr = highaddr (= BUS_SPACE_MAXADDR = 4GB) ?
+
+              filtfunc      Optional filter function (may be NULL) to be
+                            called for any attempt to map memory into the win-
+                            dow described by lowaddr and highaddr. A filter
+                            function is only required when the single window
+                            described by lowaddr and highaddr cannot ade-
+                            quately describe the constraints of the device.
+                            The filter function will be called for every
+                            machine page that overlaps the exclusion window.
+              filtfuncarg   Argument passed to all calls to the filter func-
+                            tion for this tag.  May be NULL.
+              maxsegsz      Maximum size, in bytes, of a segment in any DMA
+                            mapped region associated with dmat.
+              maxsize       Maximum size, in bytes, of the sum of all segment
+                            lengths in a given DMA mapping associated with
+                            this tag.
+              nsegments     Number of discontinuities (scatter/gather seg-
+                            ments) allowed in a DMA mapped region.  If there
+                            is no restriction, BUS_SPACE_UNRESTRICTED may be
+                            specified.
+              flags         Are as follows:
+                            BUS_DMA_ALLOCNOW  Allocate the resources necessary
+                                              to guarantee that all map load
+                                              operations associated with this
+                                              tag will not block.  If suffi-
+                                              cient resources are not avail-
+                                              able, ENOMEM is returned.
+              dmat          Pointer to a bus_dma_tag_t where the resulting DMA
+                            tag will be stored.
+
+              Returns ENOMEM if sufficient memory is not available for tag
+              creation or allocating mapping resources.
+	 */
+
 	error = bus_dma_tag_create(sc->virtio_dmat,
 			VIRTIO_PAGE_SIZE,
 			0,
