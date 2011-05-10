@@ -1,10 +1,14 @@
 /* NOTES
  *
  * virtio_probe()
- *
- * **
- * virtio_alloc_vq()
  * virtio_attach()
+ * virtio_set_status()
+ * virtio_reset()
+ *
+ * vq_sync_aring
+ * vq_sync_uring
+ * *
+ * virtio_vq_intr
  *
  */
 
@@ -77,6 +81,7 @@ static const char *virtio_device_name[] = {
 					panic("assertion: %s in %s",	\
 					#exp, __func__); } while (0)
 #define MINSEG_INDIRECT     2 /* use indirect if nsegs >= this value */
+
 void virtio_set_status(struct virtio_softc *sc, int status)
 {
 	int old = 0;
@@ -84,12 +89,15 @@ void virtio_set_status(struct virtio_softc *sc, int status)
 	if (status != 0)
 		old = bus_space_read_1(sc->sc_iot, sc->sc_ioh,
 				       VIRTIO_CONFIG_DEVICE_STATUS);
+
 	//kprintf("%s: old:%d status:%d\n",__FUNCTION__,old,status);
 	bus_space_write_1(sc->sc_iot, sc->sc_ioh, VIRTIO_CONFIG_DEVICE_STATUS,
 			  status|old);
 	//kprintf("%s: new old:%d status:%d\n",__FUNCTION__,old,status);
 }
+
 #define virtio_device_reset(sc)	virtio_set_status((sc), 0)
+
 /*
  * Reset the device.
  */
@@ -109,6 +117,14 @@ virtio_reset(struct virtio_softc *sc)
 {
 	virtio_device_reset(sc);
 }
+
+/*?
+ * uring <> aring ?
+ * dans NetBSD:
+ *  void
+ *  bus_dmamap_sync(bus_dma_tag_t tag, bus_dmamap_t dmam, bus_addr_t offset,
+ *  bus_size_t len, int ops);
+ */
 static inline void
 vq_sync_uring(struct virtio_softc *sc, struct virtqueue *vq, int ops)
 {
@@ -118,6 +134,23 @@ vq_sync_uring(struct virtio_softc *sc, struct virtqueue *vq, int ops)
 			 //+ vq->vq_num * sizeof(struct vring_used_elem),
 			ops);
 }
+
+
+/*!bus_dmamap_sync(dmat, map, op)
+ *	      Performs synchronization of a device visible mapping with the
+ *	      CPU visible memory referenced by that mapping.  Arguments are as
+ *	      follows:
+ *	      dmat  DMA tag used to allocate map.
+ *	      map   The DMA mapping to be synchronized.
+ *	      op    Type of synchronization operation to perform.  See the
+ *		    	definition of bus_dmasync_op_t for a description of the
+ *		    	acceptable values for op.
+ *
+ *				Synchronization operations are expressed from the perspective of
+ *   			the host RAM, e.g., a device -> memory operation is a READ and a
+ *   			memory -> device operation is a WRITE.
+ *
+ */
 
 static inline void
 vq_sync_aring(struct virtio_softc *sc, struct virtqueue *vq, int ops)
@@ -754,6 +787,10 @@ virtio_vq_intr(struct virtio_softc *sc)
 
 	for (i = 0; i < sc->sc_nvqs; i++) {
 		vq = &sc->sc_vqs[i];
+
+		/*!
+		 * int vq_queued: queued status
+		 */
 		if (vq->vq_queued) {
 			vq->vq_queued = 0;
 			vq_sync_aring(sc, vq, BUS_DMASYNC_POSTWRITE);
@@ -964,6 +1001,8 @@ static int virtio_attach(device_t dev)
 	 * struct resource *
      * bus_alloc_resource(device_t dev, int type, int *rid, u_long start,
 	 * u_long end, u_long count, u_int flags);
+	 *
+	 * A pointer to struct resource is returned on success, a null pointer otherwise.
 	 */
     sc->io = bus_alloc_resource(dev, SYS_RES_IOPORT, &rid,
             0, ~0, 1, RF_ACTIVE);
@@ -989,6 +1028,25 @@ static int virtio_attach(device_t dev)
     if (sc->res_irq == NULL){
         kprintf("Couldn't alloc res_irq\n");
     }
+
+   /*! The BUS_SETUP_INTR() method will create and attach an interrupt handler
+    *     to an interrupt previously allocated by the resource manager's
+    *     BUS_ALLOC_RESOURCE(9) method.  The flags are found in <sys/bus.h>, and
+    *     give the broad category of interrupt.  The flags also tell the interrupt
+    *     handlers about certain device driver characteristics.
+    *
+    *     int
+  	*  	  bus_setup_intr(device_t dev, struct resource *r, int flags,
+	*     river_filter_t filter, driver_intr_t ithread, void *arg,
+	*     void **cookiep)
+	*
+	*     The cookiep argument is a pointer to a void * that BUS_SETUP_INTR() will
+     	  write a cookie for the parent bus' use to if it is successful in estab-
+          lishing an interrupt.  Driver writers may assume that this cookie will be
+          non-zero.
+
+          Zero is returned on success, otherwise an appropriate error is returned
+    */
 
 	error = bus_setup_intr(sc->dev, sc->res_irq, 0,
 			(driver_intr_t *)virtio_intr, (void *)sc,
@@ -1017,6 +1075,12 @@ static int virtio_attach(device_t dev)
 		goto handle_error;
 
 	}
+
+	/*!
+	 * device_add_child(device_t dev, const char *name, int unit device_t)
+	 * add a new device as a child of an existing device
+	 */
+
 	sc->sc_childdevid = virtio_type;
 	kprintf("Virtio Type: %d\n", virtio_type);
 	if (virtio_type == PCI_PRODUCT_VIRTIO_NETWORK) {
@@ -1026,6 +1090,12 @@ static int virtio_attach(device_t dev)
 	else if (virtio_type == PCI_PRODUCT_VIRTIO_BLOCK) {
 			child = device_add_child(dev, "virtio_blk",0);
 	} 
+
+	/*/!\
+	 * here, a condition will have to be added for
+	 * the memory ballooning device
+	 */
+
 	else {
 		kprintf("Dev %s not supported\n",virtio_device_name[virtio_type]); 
 		goto handle_error;
