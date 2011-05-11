@@ -895,7 +895,7 @@ virtio_negotiate_features(struct virtio_softc *sc, uint32_t guest_features)
 
     uint32_t r;
 
-	/* 
+   /*
 	* XXX- this is true with ld_virtio.c in nbsd on kvm... so set it until
 	* we know what it really does...
 	*/ 
