@@ -5,10 +5,13 @@
  * virtio_set_status()
  * virtio_reset()
  *
+ * virtio_vq_intr
  * vq_sync_aring
  * vq_sync_uring
+ *
+ *
  * *
- * virtio_vq_intr
+ *
  *
  */
 
@@ -796,6 +799,27 @@ virtio_vq_intr(struct virtio_softc *sc)
 			vq_sync_aring(sc, vq, BUS_DMASYNC_POSTWRITE);
 		}
 		vq_sync_uring(sc, vq, BUS_DMASYNC_POSTREAD);
+
+		/*In order to allow high-performance buffering implementations to avoid bus
+		 *   activity on every operation, read and write ordering should be specified
+		 *    explicitly by drivers when necessary.  The bus_space_barrier() function
+		 *    provides that ability.
+		 *
+		 *  bus_space_barrier(space, handle, offset, length, flags)
+		 *    The bus_space_barrier() function enforces ordering of bus space read and
+		 *    write operations for the specified subregion (described by the offset and
+		 *    length parameters) of the region named by handle in the space named by
+		 *    space.
+		 *
+		 *    The flags argument controls what types of operations are to be ordered.
+     	 	  Supported flags are:
+
+     	 	  BUS_SPACE_BARRIER_READ   Synchronize read operations.
+			  BUS_SPACE_BARRIER_WRITE  Synchronize write operations.
+		 *
+		 *
+		 */
+
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_used_idx, 2,
 						  BUS_SPACE_BARRIER_READ);
 		//membar_consumer();
