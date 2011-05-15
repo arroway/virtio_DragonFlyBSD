@@ -1,6 +1,39 @@
 /*
- * cleaning some portions of the code that are already written in virtio.c
+ * 15/05:
+ * do I have to have attach/detach functions ?
+ * do I have to have device methods, etc (end of the file) ?
+ * Do virtio.c already deal with each one ?
+ *
  */
+
+
+/*	$NetBSD$	*/
+
+/*
+ * Copyright (c) 2010 Minoura Makoto.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -25,7 +58,39 @@
 #include <bus/pci/pcivar.h>
 #include <bus/pci/pcireg.h>
 
-#include "blkvar.h"
+#include "virtioreg.h"
+#include "virtiovar.h"
+
+/* Configuration registers */
+#define VIRTIO_BLK_CONFIG_CAPACITY	0 /* 64bit */
+#define VIRTIO_BLK_CONFIG_SIZE_MAX	8 /* 32bit */
+#define VIRTIO_BLK_CONFIG_SEG_MAX	12 /* 32bit */
+#define VIRTIO_BLK_CONFIG_GEOMETRY_C	16 /* 16bit */
+#define VIRTIO_BLK_CONFIG_GEOMETRY_H	18 /* 8bit */
+#define VIRTIO_BLK_CONFIG_GEOMETRY_S	19 /* 8bit */
+#define VIRTIO_BLK_CONFIG_BLK_SIZE	20 /* 32bit */
+#define VIRTIO_BLK_CONFIG_SECTORS_MAX	24 /* 32bit */
+
+#define B_READ 1
+/* Feature bits */
+#define VIRTIO_BLK_F_BARRIER    (1<<0)
+#define VIRTIO_BLK_F_SIZE_MAX   (1<<1)
+#define VIRTIO_BLK_F_SEG_MAX    (1<<2)
+#define VIRTIO_BLK_F_GEOMETRY   (1<<4)
+#define VIRTIO_BLK_F_RO     (1<<5)
+#define VIRTIO_BLK_F_BLK_SIZE   (1<<6)
+#define VIRTIO_BLK_F_SCSI   (1<<7)
+#define VIRTIO_BLK_F_FLUSH  (1<<9)
+#define VIRTIO_BLK_F_SECTOR_MAX (1<<10)
+
+/* Command */
+#define VIRTIO_BLK_T_IN		0
+#define VIRTIO_BLK_T_OUT	1
+#define VIRTIO_BLK_T_BARRIER	0x80000000
+
+/* Status */
+#define VIRTIO_BLK_S_OK		0
+#define VIRTIO_BLK_S_IOERR	1
 
 
 static int  virtio_blk_probe(device_t dev);
@@ -190,22 +255,6 @@ vbd_disk_dump(struct dev_dump_args *ap)
 	kprintf("%s\n", __FUNCTION__);
 	return 1;
 }
-
-
-static int virtio_blk_probe(device_t dev)
-{
-	u_int32_t id = pci_get_device(dev);
-	kprintf("%s product_id:%d\n", __FUNCTION__,id);
-	if (id >= 0x1000  && id <= 0x103f){
-		//bus_generic_probe(dev);
-		if (pci_read_config(dev, PCIR_SUBDEV_0, 2) == PCI_PRODUCT_VIRTIO_BLOCK) {
-			return 0;
-		}
-	}
-
-	return 1;
-}
-
 
 static void
 ld_virtio_vq_done1(struct virtio_blk_softc *sc,
@@ -543,15 +592,59 @@ static int virtio_blk_attach(device_t dev)
 	return 0;
 }
 
-static device_method_t virtio_blk_methods[] = {
+static int virtio_blk_detach(device_t dev)
+{
+	kprintf("%s \n",__FUNCTION__);
+	struct virtio_blk_softc *sc = device_get_softc(dev);
+	device_t pdev = device_get_parent(sc->dev);
+	struct virtio_softc *vsc = device_get_softc(pdev);
+	struct virtqueue *vq = &sc->sc_vq[0];
+	int i;
+
+	for (i=0; i<sc->sc_vq[0].vq_num; i++) {
+		struct virtio_blk_req *vr = &sc->sc_reqs[i];
+
+		bus_dmamap_destroy(vsc->payloads_dmat, vr->payload_dmap);
+
+		bus_dmamap_unload(vsc->requests_dmat, vr->cmd_dmap);
+		bus_dmamap_destroy(vsc->requests_dmat, vr->cmd_dmap);
+	}
+	bus_dmamap_unload(vsc->requests_dmat, vsc->cmds_dmamap);
+	bus_dmamem_free(vsc->requests_dmat, sc->sc_reqs, vsc->cmds_dmamap);
+
+	bus_dma_tag_destroy(vsc->payloads_dmat);
+	bus_dma_tag_destroy(vsc->requests_dmat);
+
+	virtio_reset(vsc);
+	virtio_free_vq(vsc, &sc->sc_vq[0]);
+
+	/*unload and free virtqueue*/
+	bus_dmamap_unload(vq->vq_dmat, vq->vq_dmamap);
+	bus_dmamem_free(vq->vq_dmat, vq->vq_vaddr, vq->vq_dmamap);
+	bus_dma_tag_destroy(vq->vq_dmat);
+	memset(vq, 0, sizeof(*vq));
+
+	/*free dev disk/stat */
+	disk_invalidate(&sc->disk);
+	disk_destroy(&sc->disk);
+	devstat_remove_entry(&sc->stats);
+
+
+	return 0;
+}
+
+
+
+/*static device_method_t virtio_blk_methods[] = {
 //	DEVMETHOD(device_identify,         virtio_identify),
-	DEVMETHOD(device_probe,         virtio_blk_probe),
-	DEVMETHOD(device_attach,        virtio_blk_attach),
+//	DEVMETHOD(device_probe,         virtio_blk_probe),
+//	DEVMETHOD(device_attach,        virtio_blk_attach),
  //	DEVMETHOD(bus_driver_added,    virtio_bus_driver_added),
 //    DEVMETHOD(bus_add_child,    virtio_bus_add_child),
 
-	{ 0, 0 }
+//	{ 0, 0 }
 };
+
 
 static driver_t virtio_blk_driver = {
 	"virtiobus",
@@ -564,3 +657,4 @@ static devclass_t virtio_blk_devclass;
 DRIVER_MODULE(virtio_blk, pci, virtio_blk_driver, virtio_blk_devclass, 0, 0);
 MODULE_VERSION(virtio_blk, 0);
 
+*/
