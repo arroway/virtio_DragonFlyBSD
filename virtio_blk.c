@@ -1,8 +1,5 @@
 /*
- * 15/05:
- * do I have to have attach/detach functions ?
- * do I have to have device methods, etc (end of the file) ?
- * Do virtio.c already deal with each one ?
+ * is the probe function needed ? (tests)
  *
  */
 
@@ -418,6 +415,19 @@ ld_virtio_alloc_reqs(struct virtio_blk_softc *sc, int qsize)
 	return 0;
 }
 
+static int virtio_blk_probe(device_t dev)
+{
+	u_int32_t id = pci_get_device(dev);
+	kprintf("%s product_id:%d\n", __FUNCTION__,id);
+	if (id >= 0x1000  && id <= 0x103f){
+		//bus_generic_probe(dev);
+		if (pci_read_config(dev, PCIR_SUBDEV_0, 2) == PCI_PRODUCT_VIRTIO_BLOCK) {
+			return 0;
+		}
+	}
+
+	return 1;
+}
 
 static int virtio_blk_attach(device_t dev)
 {
@@ -635,20 +645,22 @@ static int virtio_blk_detach(device_t dev)
 
 
 
-/*static device_method_t virtio_blk_methods[] = {
+static device_method_t virtio_blk_methods[] = {
 //	DEVMETHOD(device_identify,         virtio_identify),
-//	DEVMETHOD(device_probe,         virtio_blk_probe),
-//	DEVMETHOD(device_attach,        virtio_blk_attach),
- //	DEVMETHOD(bus_driver_added,    virtio_bus_driver_added),
-//    DEVMETHOD(bus_add_child,    virtio_bus_add_child),
+	DEVMETHOD(device_probe,         virtio_blk_probe),
+	DEVMETHOD(device_attach,        virtio_blk_attach),
+	DEVMETHOD(device_detach,		virtio_blk_detach),
+//	DEVMETHOD(bus_driver_added,    virtio_bus_driver_added),
+//  DEVMETHOD(bus_add_child,    virtio_bus_add_child),
 
-//	{ 0, 0 }
+	{ 0, 0 }
 };
 
 
 static driver_t virtio_blk_driver = {
-	"virtiobus",
-	virtio_blk_methods,
+//	"virtiobus",
+	"virtio_blk",
+		virtio_blk_methods,
 	sizeof(struct virtio_blk_softc),
 };
 
