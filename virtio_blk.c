@@ -113,44 +113,6 @@ static struct dev_ops vbd_disk_ops = {
 	.d_dump =      vbd_disk_dump,
 } ;
 
-struct virtqueue {
-	struct virtio_blk_softc *vq_owner;
-	bus_dma_tag_t       vq_dmat;
-	bus_dmamap_t        vq_dmamap;
-	bus_addr_t      bus_addr;
-	unsigned int        vq_num;	/* queue size (# of entries) */
-	int         vq_index; /* queue number (0, 1, ...) */
-
-	/* virtqueue allocation info */
-	void            *vq_vaddr;
-	int         vq_availoffset;
-	int         vq_usedoffset;
-	int         vq_indirectoffset;
-	int         vq_maxsegsize;
-	int         vq_maxnsegs;/* vring pointers (KVA) */
-    void            *vq_indirect;
-	unsigned int        vq_bytesize;
-
-    /* vring pointers (KVA) */
-    struct vring_desc   *vq_desc;
-	struct vring_avail  *vq_avail;
-	struct vring_used   *vq_used;
-
-    /* free entry management */
-    struct vq_entry     *vq_entries; /* free entry management */
-    TAILQ_HEAD(, vq_entry) vq_freelist;
-    struct spinlock		vq_freelist_lock;
-
-    /* enqueue/dequeue status */
-    uint16_t		vq_avail_idx;
-	uint16_t		vq_used_idx;
-    int			vq_queued;
-    struct spinlock		vq_aring_lock;
-	struct spinlock		vq_uring_lock;
-
-    /* interrupt handler */
-	int			(*vq_done)(struct virtqueue*);
-};
 
 /* Request header structure */
 struct virtio_blk_req_hdr {
@@ -168,7 +130,6 @@ struct virtio_blk_req_hdr {
 	uint64_t	sector;
 } __packed;
 /* 512*virtio_blk_req_hdr.sector byte payload and 1 byte status follows */
-
 
 /*
  * ld_virtiovar:
