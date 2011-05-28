@@ -113,6 +113,128 @@ static struct dev_ops vbd_disk_ops = {
 	.d_dump =      vbd_disk_dump,
 } ;
 
+struct virtqueue {
+	struct virtio_blk_softc *vq_owner;
+	bus_dma_tag_t       vq_dmat;
+	bus_dmamap_t        vq_dmamap;
+	bus_addr_t      bus_addr;
+	unsigned int        vq_num;	/* queue size (# of entries) */
+	int         vq_index; /* queue number (0, 1, ...) */
+
+	/* virtqueue allocation info */
+	void            *vq_vaddr;
+	int         vq_availoffset;
+	int         vq_usedoffset;
+	int         vq_indirectoffset;
+	int         vq_maxsegsize;
+	int         vq_maxnsegs;/* vring pointers (KVA) */
+    void            *vq_indirect;
+	unsigned int        vq_bytesize;
+
+    /* vring pointers (KVA) */
+    struct vring_desc   *vq_desc;
+	struct vring_avail  *vq_avail;
+	struct vring_used   *vq_used;
+
+    /* free entry management */
+    struct vq_entry     *vq_entries; /* free entry management */
+    TAILQ_HEAD(, vq_entry) vq_freelist;
+    struct spinlock		vq_freelist_lock;
+
+    /* enqueue/dequeue status */
+    uint16_t		vq_avail_idx;
+	uint16_t		vq_used_idx;
+    int			vq_queued;
+    struct spinlock		vq_aring_lock;
+	struct spinlock		vq_uring_lock;
+
+    /* interrupt handler */
+	int			(*vq_done)(struct virtqueue*);
+};
+
+/* Request header structure */
+struct virtio_blk_req_hdr {
+	uint32_t	type;	/* VIRTIO_BLK_T_* */
+	uint32_t	ioprio;
+	uint64_t	sector;
+} __packed;
+/* 512*virtio_blk_req_hdr.sector byte payload and 1 byte status follows */
+
+
+/* Request header structure */
+struct virtio_blk_req_hdr {
+	uint32_t	type;	/* VIRTIO_BLK_T_* */
+	uint32_t	ioprio;
+	uint64_t	sector;
+} __packed;
+/* 512*virtio_blk_req_hdr.sector byte payload and 1 byte status follows */
+
+
+/*
+ * ld_virtiovar:
+ */
+struct virtio_blk_req {
+	struct virtio_blk_req_hdr	vr_hdr;
+	uint8_t				vr_status;
+	struct buf			*vr_bp;
+
+    bus_dmamap_t			cmd_dmap;
+    bus_addr_t	ds_addr;	/* DMA address */
+	bus_size_t	ds_len;		/* length of transfer */
+
+	bus_dmamap_t			payload_dmap;
+    bus_dma_segment_t *segs;
+    int nseg;
+};
+
+struct virtio_blk_softc {
+	device_t dev;
+
+	bus_space_tag_t     sc_iot;
+	bus_space_handle_t  sc_ioh;
+	int         sc_config_offset;
+
+
+	bool sc_indirect;
+	int rid_irq;
+	int sc_readonly;
+	struct resource *res_irq;
+	bus_dma_tag_t       virtio_dmat;
+	uint32_t    sc_features;
+	int     maxxfersize;
+	/* vring pointers (KVA) */
+	struct vring_desc   *vq_desc;
+	struct vring_avail  *vq_avail;
+	struct vring_used   *vq_used;
+	void            *vq_indirect;
+
+    struct virtqueue sc_vq;
+
+    /*Block stuff*/
+    cdev_t 			cdev;
+    struct devstat			stats;
+    struct disk disk;
+
+    bus_dma_tag_t requests_dmat;
+	bus_dmamap_t cmds_dmamap;
+
+    bus_dma_tag_t payloads_dmat;
+	//bus_dma_tag_t payloads_dmat;
+	//bus_dmamap_t payloads_dmamap;
+
+   	struct virtio_blk_req	*sc_reqs;
+	void * virtio_intr;
+
+    int         (*sc_config_change)(struct virtio_blk_softc*);
+	/* set by child */
+	int         (*sc_intrhand)(struct virtio_blk_softc*);
+	/* set by child */
+
+};
+
+
+
+
 /* Free descriptor management.
  */
 static struct vq_entry *

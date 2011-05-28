@@ -340,7 +340,7 @@ virtio_alloc_vq(struct virtio_softc *sc,
                             ware requiring DMA transfers to start on a multi-
                             ple of 4K would specify 4096.
 
-      /*? valeur d'alignment = VIRTIO_PAGE_SIZE = 4096 ?
+       ? valeur d'alignment = VIRTIO_PAGE_SIZE = 4096 ?
 
               boundary      Boundary constraint, in bytes, of the target DMA
                             memory region.  The boundary indicates the set of
@@ -366,7 +366,7 @@ virtio_alloc_vq(struct virtio_softc *sc,
                             is used to bounce requests that would otherwise
                             conflict with the exclusion window.
 
-        /*? ici, lowaddr = highaddr (= BUS_SPACE_MAXADDR = 4GB) ?
+        ? ici, lowaddr = highaddr (= BUS_SPACE_MAXADDR = 4GB) ?
 
               filtfunc      Optional filter function (may be NULL) to be
                             called for any attempt to map memory into the win-
