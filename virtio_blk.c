@@ -118,7 +118,7 @@ struct virtio_blk_softc {
 	device_t	sc_dev;
 
 	struct virtio_softc *sc_virtio;
-	struct virtqueue	sc_vq[1];
+	struct virtqueue	sc_vq;
 
 	struct virtio_blk_req	*sc_reqs;
 
@@ -485,15 +485,13 @@ static int virtio_blk_probe(device_t dev)
 
 static int virtio_blk_attach(device_t dev)
 {
-	// dev is the parent device
-	// we get the child device from it : device_t &vsc->sc_child in
-	// virtio_softc struct (virtiovar.h)
+	// dev is the child device
 
 	struct virtio_blk_softc *sc = device_get_softc(dev);
 	struct blk_softc *blk = &sc->sc_blk;
 	sc->sc_dev = dev;
 
-	device_t pdev = device_get_parent(sc->dev);
+	device_t pdev = device_get_parent(sc->sc_dev);
 	struct virtio_softc *vsc = device_get_softc(pdev);
 
 	sc->sc_virtio = vsc;
@@ -534,7 +532,7 @@ static int virtio_blk_attach(device_t dev)
 	}
 
 	error = bus_setup_intr(vsc->dev, vsc->res_irq, 0,
-			(driver_intr_t *)virtio_intr, (void *)vsc,
+			(driver_intr_t *)vsc->virtio_intr, (void *)vsc,
 			&(vsc->virtio_intr), NULL);
 
 	if (error){
@@ -583,7 +581,7 @@ static int virtio_blk_attach(device_t dev)
 		kprintf("is not readonly\n");
 		sc->sc_readonly = 0;
 	}
-	kprintf("sc_readonly:%u\n", vsc->sc_readonly);
+	kprintf("sc_readonly:%u\n", sc->sc_readonly);
 
 	sc->maxxfersize = MAXPHYS; 
 	if (features & VIRTIO_BLK_F_SECTOR_MAX) {
@@ -596,7 +594,7 @@ static int virtio_blk_attach(device_t dev)
 	}
 	kprintf("maxxfersize:%d\n", sc->maxxfersize);
 
-	if (virtio_alloc_vq(vsc, &sc->sc_vq, 0,
+	if (virtio_alloc_vq(vsc, sc->sc_vq, 0,
 			    sc->maxxfersize, sc->maxxfersize / NBPG + 2,
 			    "I/O request") != 0) {
 		kprintf("Bad virtio_alloc_vq\n");

@@ -65,25 +65,6 @@
 #include "virtiovar.h"
 #include "virtioreg.h"
 
-static const char *virtio_device_name[] = {
-	"Unknown (0)",		/* 0 */
-	"Network",		/* 1 */
-	"Block",		/* 2 */
-	"Console",		/* 3 */
-	"Entropy",		/* 4 */
-	"Memory Balloon",	/* 5 */
-	"Unknown (6)",		/* 6 */
-	"Unknown (7)",		/* 7 */
-	"Unknown (8)",		/* 8 */
-	"9P Transport"		/* 9 */	
-};
-
-#define NDEVNAMES	(sizeof(virtio_device_name)/sizeof(char*))
-
-#define kassert(exp) do { if (__predict_false(!(exp)))	\
-					panic("assertion: %s in %s",	\
-					#exp, __func__); } while (0)
-#define MINSEG_INDIRECT     2 /* use indirect if nsegs >= this value */
 
 void virtio_set_status(struct virtio_softc *sc, int status)
 {
