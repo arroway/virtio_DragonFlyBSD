@@ -1,9 +1,3 @@
-/*
- * is the probe function needed ? (tests)
- *
- */
-
-
 /*	$NetBSD$	*/
 
 /*
@@ -57,6 +51,8 @@
 
 #include "virtioreg.h"
 #include "virtiovar.h"
+#include "blkvar.h"
+
 
 /* Configuration registers */
 #define VIRTIO_BLK_CONFIG_CAPACITY	0 /* 64bit */
@@ -90,39 +86,6 @@
 #define VIRTIO_BLK_S_IOERR	1
 
 
-static int  virtio_blk_probe(device_t dev);
-static int  virtio_blk_attach(device_t dev);
-
-
-
-/*
- * Interface to the device switch.
- */
-static	d_open_t	vbd_disk_open;
-static	d_close_t	vbd_disk_close;
-static	d_strategy_t	vbd_disk_strategy;
-static	d_dump_t	vbd_disk_dump;
-
-static struct dev_ops vbd_disk_ops = {
-	{ "vbd", 152/*AAC_DISK_CDEV_MAJOR*/, D_DISK},
-	.d_open =      vbd_disk_open,
-	.d_close =     vbd_disk_close,
-	.d_read =      physread,
-	.d_write =     physwrite,
-	.d_strategy =      vbd_disk_strategy,
-	.d_dump =      vbd_disk_dump,
-} ;
-
-
-/* Request header structure */
-struct virtio_blk_req_hdr {
-	uint32_t	type;	/* VIRTIO_BLK_T_* */
-	uint32_t	ioprio;
-	uint64_t	sector;
-} __packed;
-/* 512*virtio_blk_req_hdr.sector byte payload and 1 byte status follows */
-
-
 /* Request header structure */
 struct virtio_blk_req_hdr {
 	uint32_t	type;	/* VIRTIO_BLK_T_* */
@@ -148,50 +111,58 @@ struct virtio_blk_req {
     int nseg;
 };
 
+
 struct virtio_blk_softc {
-	device_t dev;
 
-	bus_space_tag_t     sc_iot;
-	bus_space_handle_t  sc_ioh;
-	int         sc_config_offset;
+	struct blk_softc sc_blk;
+	device_t	sc_dev;
 
+	struct virtio_softc *sc_virtio;
+	struct virtqueue	sc_vq[1];
 
-	bool sc_indirect;
-	int rid_irq;
+	struct virtio_blk_req	*sc_reqs;
+
 	int sc_readonly;
-	struct resource *res_irq;
-	bus_dma_tag_t       virtio_dmat;
+
 	uint32_t    sc_features;
 	int     maxxfersize;
-	/* vring pointers (KVA) */
-	struct vring_desc   *vq_desc;
-	struct vring_avail  *vq_avail;
-	struct vring_used   *vq_used;
-	void            *vq_indirect;
 
-    struct virtqueue sc_vq;
+	//added : what for ?
+	bus_dma_segment_t	sc_reqs_segs[1];
+	kmutex_t	sc_lock;
 
-    /*Block stuff*/
+    // Block stuff : for testing
     cdev_t 			cdev;
     struct devstat			stats;
     struct disk disk;
 
-    bus_dma_tag_t requests_dmat;
-	bus_dmamap_t cmds_dmamap;
-
-    bus_dma_tag_t payloads_dmat;
-	//bus_dma_tag_t payloads_dmat;
-	//bus_dmamap_t payloads_dmamap;
-
-   	struct virtio_blk_req	*sc_reqs;
-	void * virtio_intr;
-
-    int         (*sc_config_change)(struct virtio_blk_softc*);
-	/* set by child */
-	int         (*sc_intrhand)(struct virtio_blk_softc*);
-	/* set by child */
-
 };
+
+
+
+static int  virtio_blk_probe(device_t dev);
+static int  virtio_blk_attach(device_t dev);
+
+
+
+/*
+ * Interface to the device switch.
+ */
+static	d_open_t	vbd_disk_open;
+static	d_close_t	vbd_disk_close;
+static	d_strategy_t	vbd_disk_strategy;
+static	d_dump_t	vbd_disk_dump;
+
+static struct dev_ops vbd_disk_ops = {
+	{ "vbd", 152/*AAC_DISK_CDEV_MAJOR*/, D_DISK},
+	.d_open =      vbd_disk_open,
+	.d_close =     vbd_disk_close,
+	.d_read =      physread,
+	.d_write =     physwrite,
+	.d_strategy =      vbd_disk_strategy,
+	.d_dump =      vbd_disk_dump,
+} ;
+
 
 
 
@@ -514,9 +485,21 @@ static int virtio_blk_probe(device_t dev)
 
 static int virtio_blk_attach(device_t dev)
 {
+	// dev is the parent device
+	// we get the child device from it : device_t &vsc->sc_child in
+	// virtio_softc struct (virtiovar.h)
+
 	struct virtio_blk_softc *sc = device_get_softc(dev);
+	struct blk_softc *blk = &sc->sc_blk;
+	sc->sc_dev = dev;
+
+	device_t pdev = device_get_parent(sc->dev);
+	struct virtio_softc *vsc = device_get_softc(pdev);
+
+	sc->sc_virtio = vsc;
+	vsc->dev = pdev;
+
 	struct resource *io;
-	sc->dev = dev;
 	int rid,error;
 	int features;
 	int  qsize;
@@ -530,38 +513,38 @@ static int virtio_blk_attach(device_t dev)
 		device_printf(dev, "No I/O space?!\n");
 		return ENOMEM;
 	}
-	sc->sc_iot = rman_get_bustag(io);
-	sc->sc_ioh = rman_get_bushandle(io);
-    sc->sc_config_offset = VIRTIO_CONFIG_DEVICE_CONFIG_NOMSI;
-	sc->sc_config_change = 0;
-	sc->sc_intrhand = virtio_vq_intr;
+	vsc->sc_iot = rman_get_bustag(io);
+	vsc->sc_ioh = rman_get_bushandle(io);
+    vsc->sc_config_offset = VIRTIO_CONFIG_DEVICE_CONFIG_NOMSI;
+	vsc->sc_config_change = 0;
+	vsc->sc_intrhand = virtio_vq_intr;
 
-	kprintf("%u %u\n", (unsigned int) sc->sc_iot,(unsigned int)sc->sc_ioh);
+	kprintf("%u %u\n", (unsigned int) vsc->sc_iot,(unsigned int)vsc->sc_ioh);
 	kprintf("%d Virtio %s Device (rev. 0x%02x)\n",
 			pci_get_vendor(dev),
 			(pci_read_config(dev, PCIR_SUBDEV_0, 2)<NDEVNAMES?
 			 virtio_device_name[pci_read_config(dev, PCIR_SUBDEV_0, 2)]:"Unknown"),
 			pci_read_config(dev, PCIR_REVID, 1));
 
-	sc->res_irq = bus_alloc_resource_any(sc->dev, SYS_RES_IRQ,
-			&sc->rid_irq, RF_SHAREABLE|RF_ACTIVE);
-	kprintf("rid_irq:%d\n", sc->rid_irq);
-	if (sc->res_irq == NULL){
+	vsc->res_irq = bus_alloc_resource_any(vsc->dev, SYS_RES_IRQ,
+			&vsc->rid_irq, RF_SHAREABLE|RF_ACTIVE);
+	kprintf("rid_irq:%d\n", vsc->rid_irq);
+	if (vsc->res_irq == NULL){
 		kprintf("Couldn't alloc res_irq\n");
 	}
 
-	error = bus_setup_intr(sc->dev, sc->res_irq, 0,
-			(driver_intr_t *)virtio_intr, (void *)sc,
-			&(sc->virtio_intr), NULL);
+	error = bus_setup_intr(vsc->dev, vsc->res_irq, 0,
+			(driver_intr_t *)virtio_intr, (void *)vsc,
+			&(vsc->virtio_intr), NULL);
 
 	if (error){
 		kprintf("Couldn't setup intr\n");
 		return(1);
 	}
 
-	virtio_device_reset(sc);
-	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_ACK);
-	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER);
+	virtio_device_reset(vsc);
+	virtio_set_status(vsc, VIRTIO_CONFIG_DEVICE_STATUS_ACK);
+	virtio_set_status(vsc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER);
 	error = bus_dma_tag_create(NULL,
 			1,
 			0,
@@ -572,19 +555,19 @@ static int virtio_blk_attach(device_t dev)
 			0,
 	        BUS_SPACE_MAXSIZE_32BIT,
 			0,
-			&sc->virtio_dmat);
+			&vsc->virtio_dmat);
 
 	if (error ) {
 		kprintf("error");
 		return 1;
 	}
 
- 	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK); 
+ 	virtio_set_status(vsc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK);
 
 	/*Block attach stuff*/
     device_set_desc(dev, "virtio-blk");
 
-	features = virtio_negotiate_features(sc,
+	features = virtio_negotiate_features(vsc,
 			(VIRTIO_BLK_F_SIZE_MAX |
 			 VIRTIO_BLK_F_SEG_MAX |
 			 VIRTIO_BLK_F_GEOMETRY |
@@ -600,20 +583,20 @@ static int virtio_blk_attach(device_t dev)
 		kprintf("is not readonly\n");
 		sc->sc_readonly = 0;
 	}
-	kprintf("sc_readonly:%u\n", sc->sc_readonly);
+	kprintf("sc_readonly:%u\n", vsc->sc_readonly);
 
 	sc->maxxfersize = MAXPHYS; 
 	if (features & VIRTIO_BLK_F_SECTOR_MAX) {
 		/*This isn't called for us*/
 		sc->maxxfersize = 
-			virtio_read_device_config_4(sc, VIRTIO_BLK_CONFIG_SECTORS_MAX)	* 512;
+			virtio_read_device_config_4(vsc, VIRTIO_BLK_CONFIG_SECTORS_MAX)	* 512;
 		kprintf("read_device_config maxxfersize:%u\n",sc->maxxfersize);
 		if (sc->maxxfersize > MAXPHYS)
 			sc->maxxfersize = MAXPHYS;
 	}
 	kprintf("maxxfersize:%d\n", sc->maxxfersize);
 
-	if (virtio_alloc_vq(sc, &sc->sc_vq, 0,
+	if (virtio_alloc_vq(vsc, &sc->sc_vq, 0,
 			    sc->maxxfersize, sc->maxxfersize / NBPG + 2,
 			    "I/O request") != 0) {
 		kprintf("Bad virtio_alloc_vq\n");
@@ -627,46 +610,48 @@ static int virtio_blk_attach(device_t dev)
     bzero(&info, sizeof(info));
 
 	kprintf("Size is %llu\n",(unsigned long long)
-			virtio_read_device_config_8(sc, VIRTIO_BLK_CONFIG_CAPACITY));
+			virtio_read_device_config_8(vsc, VIRTIO_BLK_CONFIG_CAPACITY));
 
 	if (features & VIRTIO_BLK_F_BLK_SIZE) {
 		kprintf("BLKSIZE feature is %d \n",
-				virtio_read_device_config_4(sc,VIRTIO_BLK_CONFIG_BLK_SIZE));
+				virtio_read_device_config_4(vsc,VIRTIO_BLK_CONFIG_BLK_SIZE));
 		//info.d_secsize = virtio_read_device_config_4(vsc,
 			//		VIRTIO_BLK_CONFIG_BLK_SIZE);
 	}
 
 	info.d_media_blksize = DEV_BSIZE;
 	info.d_media_blocks =  
-		virtio_read_device_config_8(sc, VIRTIO_BLK_CONFIG_CAPACITY);  
+		virtio_read_device_config_8(vsc, VIRTIO_BLK_CONFIG_CAPACITY);
 	kprintf("Media blocks is %lu\n", info.d_media_blocks);
 	if (features & VIRTIO_BLK_F_GEOMETRY) {		
 
 
-		info.d_ncylinders = virtio_read_device_config_2(sc,
+		info.d_ncylinders = virtio_read_device_config_2(vsc,
 					VIRTIO_BLK_CONFIG_GEOMETRY_C);
-		info.d_nheads     = virtio_read_device_config_1(sc,
+		info.d_nheads     = virtio_read_device_config_1(vsc,
 					VIRTIO_BLK_CONFIG_GEOMETRY_H);
-		info.d_secpertrack = virtio_read_device_config_1(sc,
+		info.d_secpertrack = virtio_read_device_config_1(vsc,
 					VIRTIO_BLK_CONFIG_GEOMETRY_S);
 
 		info.d_secpercyl = info.d_secpertrack * info.d_nheads;
 
 		kprintf("c:%u h:%u s:%u\n",
-				virtio_read_device_config_2(sc, VIRTIO_BLK_CONFIG_GEOMETRY_C),
-				virtio_read_device_config_1(sc, VIRTIO_BLK_CONFIG_GEOMETRY_H),
-				virtio_read_device_config_1(sc, VIRTIO_BLK_CONFIG_GEOMETRY_S));
+				virtio_read_device_config_2(vsc, VIRTIO_BLK_CONFIG_GEOMETRY_C),
+				virtio_read_device_config_1(vsc, VIRTIO_BLK_CONFIG_GEOMETRY_H),
+				virtio_read_device_config_1(vsc, VIRTIO_BLK_CONFIG_GEOMETRY_S));
 	}
 	else{
 		kprintf("Features not requested\n");
 		return 1;
 	}
 
-	if (ld_virtio_alloc_reqs(sc, qsize) < 0)
+	if (ld_virtio_alloc_reqs(vsc, qsize) < 0)
 	{
 		kprintf("Bad ld_virtio_alloc_reqs\n");
 		return 1;
 	}
+
+	sc->sc_virtio = vsc;
 
 
 	devstat_add_entry(&sc->stats, "vbd", device_get_unit(dev),

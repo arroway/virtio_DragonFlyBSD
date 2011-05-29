@@ -175,6 +175,9 @@ struct virtio_softc {
 } *sc;
 
 
+
+
+
 int
 virtio_enqueue_p(struct virtio_softc *sc, struct virtqueue *vq, int slot, 
 				 bus_addr_t	ds_addr, bus_size_t	ds_len,		
