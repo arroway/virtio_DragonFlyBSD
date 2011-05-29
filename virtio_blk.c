@@ -1,3 +1,6 @@
+//problème de définition de sc_vq dans struct virtio_blk_softc;
+//répercutions dans des appels de fonctions (pointer needed)
+
 /*	$NetBSD$	*/
 
 /*
@@ -51,7 +54,6 @@
 
 #include "virtioreg.h"
 #include "virtiovar.h"
-#include "blkvar.h"
 
 
 /* Configuration registers */
@@ -99,26 +101,26 @@ struct virtio_blk_req_hdr {
  */
 struct virtio_blk_req {
 	struct virtio_blk_req_hdr	vr_hdr;
-	uint8_t				vr_status;
-	struct buf			*vr_bp;
+	uint8_t 					vr_status;
+	struct buf 				   *vr_bp;
 
-    bus_dmamap_t			cmd_dmap;
+    bus_dmamap_t cmd_dmap;
     bus_addr_t	ds_addr;	/* DMA address */
 	bus_size_t	ds_len;		/* length of transfer */
 
-	bus_dmamap_t			payload_dmap;
+	bus_dmamap_t	   payload_dmap;
     bus_dma_segment_t *segs;
-    int nseg;
+    int 			   nseg;
 };
 
 
 struct virtio_blk_softc {
 
-	struct blk_softc sc_blk;
-	device_t	sc_dev;
+	//struct blk_softc sc_blk;
+	device_t sc_dev;
 
 	struct virtio_softc *sc_virtio;
-	struct virtqueue	sc_vq;
+	struct virtqueue sc_vq;
 
 	struct virtio_blk_req	*sc_reqs;
 
@@ -129,20 +131,17 @@ struct virtio_blk_softc {
 
 	//added : what for ?
 	bus_dma_segment_t	sc_reqs_segs[1];
-	kmutex_t	sc_lock;
+	//kmutex_t	sc_lock;
 
     // Block stuff : for testing
-    cdev_t 			cdev;
-    struct devstat			stats;
+    cdev_t cdev;
+    struct devstat stats;
     struct disk disk;
 
 };
 
-
-
 static int  virtio_blk_probe(device_t dev);
 static int  virtio_blk_attach(device_t dev);
-
 
 
 /*
@@ -159,7 +158,7 @@ static struct dev_ops vbd_disk_ops = {
 	.d_close =     vbd_disk_close,
 	.d_read =      physread,
 	.d_write =     physwrite,
-	.d_strategy =      vbd_disk_strategy,
+	.d_strategy =  vbd_disk_strategy,
 	.d_dump =      vbd_disk_dump,
 } ;
 
@@ -213,7 +212,7 @@ blkvirtio_execute(struct virtio_blk_softc *sc, struct bio *bio)
 		return EIO;
 	}
 
-	r = virtio_enqueue_prep(sc, vq, &slot);
+	r = virtio_enqueue_prep(sc->sc_virtio, vq, &slot);
 	if (r != 0){
 		kprintf("Bad bus_dmamap_load\n");
 		return r;
@@ -221,7 +220,7 @@ blkvirtio_execute(struct virtio_blk_softc *sc, struct bio *bio)
 	kprintf("slot is %d\n", slot);
 
 	vr = &sc->sc_reqs[slot];
-	r = bus_dmamap_load(sc->payloads_dmat, 
+	r = bus_dmamap_load(sc->sc_virtio->payloads_dmat,
 						vr->payload_dmap,
 						bp->b_data, 
 						bp->b_bcount, 
@@ -232,7 +231,7 @@ blkvirtio_execute(struct virtio_blk_softc *sc, struct bio *bio)
 		kprintf("Bad bus_dmamap_load\n");
 		return r;
 	}
-	r = virtio_enqueue_reserve(sc, vq, slot, vr->nseg + 2);
+	r = virtio_enqueue_reserve(sc->sc_virtio, vq, slot, vr->nseg + 2);
 	if (r != 0) {
 		kprintf("Bad enqueue_reserve\n");
 		return r;
@@ -244,24 +243,22 @@ blkvirtio_execute(struct virtio_blk_softc *sc, struct bio *bio)
 			bp->b_bufsize,isread, bp->b_bcount, (long long)bio->bio_offset,bp->b_data[0],bp->b_data[1]);
 	vr->vr_hdr.sector = bio->bio_offset/DEV_BSIZE;
 	
-	bus_dmamap_sync(sc->requests_dmat, vr->cmd_dmap,
+	bus_dmamap_sync(sc->sc_virtio->requests_dmat, vr->cmd_dmap,
 			BUS_DMASYNC_PREWRITE);
-	bus_dmamap_sync(sc->payloads_dmat, vr->payload_dmap,
+	bus_dmamap_sync(sc->sc_virtio->payloads_dmat, vr->payload_dmap,
 			isread?BUS_DMASYNC_PREREAD:BUS_DMASYNC_PREWRITE);
-	bus_dmamap_sync(sc->requests_dmat, vr->cmd_dmap,
+	bus_dmamap_sync(sc->sc_virtio->requests_dmat, vr->cmd_dmap,
 			BUS_DMASYNC_PREREAD);
 
-   
 	 
-	virtio_enqueue_p(sc, vq, slot, vr, vr->cmd_dmap,
+	virtio_enqueue_p(sc->sc_virtio, vq, slot, vr, vr->cmd_dmap,
 			 0, sizeof(struct virtio_blk_req_hdr),
 			 true);
-	virtio_enqueue(sc, vq, slot, vr, vr->payload_dmap, !isread);
-	virtio_enqueue_p(sc, vq, slot, vr, vr->cmd_dmap,
-			 offsetof(struct virtio_blk_req, vr_status),
-			 sizeof(uint8_t),
-			 false);
-	virtio_enqueue_commit(sc, vq, slot, true);
+	virtio_enqueue(sc->sc_virtio, vq, slot, vr, vr->payload_dmap, !isread);
+
+	// il manque un argument (ds_addr ou ds_len)
+	virtio_enqueue_p(sc->sc_virtio, vq, slot, vr, vr->cmd_dmap, offsetof(struct virtio_blk_req, vr_status), sizeof(uint8_t), false);
+	virtio_enqueue_commit(sc->sc_virtio, vq, slot, true);
  	return 0;
  	
 }
@@ -314,14 +311,14 @@ ld_virtio_vq_done1(struct virtio_blk_softc *sc,
 	struct virtio_blk_req *vr = &sc->sc_reqs[slot];
 	struct buf *bp = vr->vr_bp;
 
-	bus_dmamap_sync(sc->requests_dmat, vr->cmd_dmap,
+	bus_dmamap_sync(sc->sc_virtio->requests_dmat, vr->cmd_dmap,
 			//0, sizeof(struct virtio_blk_req_hdr),
 			BUS_DMASYNC_POSTWRITE);
-	bus_dmamap_sync(sc->payloads_dmat, vr->payload_dmap,
+	bus_dmamap_sync(sc->sc_virtio->payloads_dmat, vr->payload_dmap,
 	//		0, bp->b_bcount,
 	(bp->b_cmd & BUF_CMD_READ)?BUS_DMASYNC_POSTREAD
 					      :BUS_DMASYNC_POSTWRITE);
-	bus_dmamap_sync(sc->requests_dmat, vr->cmd_dmap,
+	bus_dmamap_sync(sc->sc_virtio->requests_dmat, vr->cmd_dmap,
 //			sizeof(struct virtio_blk_req_hdr), sizeof(uint8_t),
 			BUS_DMASYNC_POSTREAD);
 
@@ -334,7 +331,7 @@ ld_virtio_vq_done1(struct virtio_blk_softc *sc,
 		bp->b_resid = 0;
 	}
 
-	virtio_dequeue_commit(sc, vq, slot);
+	virtio_dequeue_commit(sc->sc_virtio, vq, slot);
 	devstat_end_transaction_buf(&sc->stats, bp);
 	kprintf("%s %d %p %p %c:%c\n",__FUNCTION__,  slot, (void *)&bp->b_bio_array[0],(void *)&bp->b_bio_array[1], bp->b_data[0],bp->b_data[511]);
 	biodone(&bp->b_bio_array[1]);
@@ -352,7 +349,7 @@ ld_virtio_vq_done(struct virtqueue *vq)
 	int slot;
 
 again:
-	if (virtio_dequeue(sc, vq, &slot, NULL))
+	if (virtio_dequeue(sc->sc_virtio, vq, &slot, NULL))
 		return r;
 	r = 1;
 
@@ -383,6 +380,8 @@ virtio_cmd_helper(void *arg, bus_dma_segment_t *segs, int nseg, int error)
 static int
 ld_virtio_alloc_reqs(struct virtio_blk_softc *sc, int qsize)
 {
+	//struct blk_softc *blk = &sc->sc_blk;
+
 	/*Create tag commands*/
 	void * vaddr;
 	int error,i;
@@ -390,7 +389,7 @@ ld_virtio_alloc_reqs(struct virtio_blk_softc *sc, int qsize)
 	int allocsize = sizeof(struct virtio_blk_req) * qsize;
 	//int payload_allocsize = 65536 * qsize;
 
-	if (bus_dma_tag_create(sc->virtio_dmat,
+	if (bus_dma_tag_create(sc->sc_virtio->virtio_dmat,
 						   1,
 						   0,
 						   BUS_SPACE_MAXADDR,
@@ -400,12 +399,12 @@ ld_virtio_alloc_reqs(struct virtio_blk_softc *sc, int qsize)
 						   1,
 						   allocsize,
 						   BUS_DMA_ALLOCNOW,
-						   &sc->requests_dmat) != 0) {
+						   &sc->sc_virtio->requests_dmat) != 0) {
 		kprintf("cmd_dmat tag create failed\n");
 		return(1);
 	}
 
-	if (bus_dma_tag_create(sc->virtio_dmat,
+	if (bus_dma_tag_create(sc->sc_virtio->virtio_dmat,
 						   1,
 						   0,
 						   BUS_SPACE_MAXADDR,
@@ -415,38 +414,38 @@ ld_virtio_alloc_reqs(struct virtio_blk_softc *sc, int qsize)
 						   30,
 						   BUS_SPACE_MAXSIZE_24BIT,
 						   BUS_DMA_ALIGNED,
-						   &sc->payloads_dmat) != 0) {
+						   &sc->sc_virtio->payloads_dmat) != 0) {
 		kprintf("cmd_dmat tag create failed\n");
 		return(1);
 	}
   
-	if (bus_dmamem_alloc(sc->requests_dmat, (void **)&vaddr,
-					 BUS_DMA_NOWAIT,&sc->cmds_dmamap)) {
+	if (bus_dmamem_alloc(sc->sc_virtio->requests_dmat, (void **)&vaddr,
+					 BUS_DMA_NOWAIT,&sc->sc_virtio->cmds_dmamap)) {
 		kprintf("bus_dmammem_load bad");
 		return(ENOMEM);
 	}
 
-	if (bus_dmamap_load(sc->requests_dmat,
-							sc->cmds_dmamap, 
+	if (bus_dmamap_load(sc->sc_virtio->requests_dmat,
+							sc->sc_virtio->cmds_dmamap,
 							vaddr,
 							allocsize, 
-							virtio_cmds_helper, sc, BUS_DMA_NOWAIT) != 0) {
+							virtio_cmds_helper, sc->sc_virtio, BUS_DMA_NOWAIT) != 0) {
 			kprintf("bus_dmamap_load bad");
 			return 1;
 	}
 	sc->sc_reqs = vaddr;
 	kprintf("vaddr:%p, qsize:%d\n", vaddr,qsize);
 	for (i = 0; i< qsize; i++) { 
-		struct virtio_blk_req *vr = &sc->sc_reqs[i]; 
+		struct virtio_blk_req *vr = &sc->sc_reqs[i];
 		
 
-		error = bus_dmamap_create(sc->requests_dmat,BUS_DMA_NOWAIT, &vr->cmd_dmap);
+		error = bus_dmamap_create(sc->sc_virtio->requests_dmat,BUS_DMA_NOWAIT, &vr->cmd_dmap);
 		if (error) {
 			kprintf("bus_dmamap_create error\n");
 			return 1;
 		}
 		
-		if (bus_dmamap_load(sc->requests_dmat,
+		if (bus_dmamap_load(sc->sc_virtio->requests_dmat,
 							vr->cmd_dmap, 
 							&vr->vr_hdr,
 							24,//offsetof(struct virtio_blk_req, vr_bp),
@@ -456,7 +455,7 @@ ld_virtio_alloc_reqs(struct virtio_blk_softc *sc, int qsize)
 		}
 		//kprintf("i:%d %p vr:%u %u \n",i,vr, vr->ds_len, &vr->vr_hdr);
 
-		error = bus_dmamap_create(sc->payloads_dmat, 0, &vr->payload_dmap);
+		error = bus_dmamap_create(sc->sc_virtio->payloads_dmat, 0, &vr->payload_dmap);
 		if (error) {
 			kprintf("bus_dmamap_create error\n");
 			return 1;
@@ -488,7 +487,7 @@ static int virtio_blk_attach(device_t dev)
 	// dev is the child device
 
 	struct virtio_blk_softc *sc = device_get_softc(dev);
-	struct blk_softc *blk = &sc->sc_blk;
+	// blk_softc *blk = &sc->sc_blk;
 	sc->sc_dev = dev;
 
 	device_t pdev = device_get_parent(sc->sc_dev);
@@ -496,6 +495,9 @@ static int virtio_blk_attach(device_t dev)
 
 	sc->sc_virtio = vsc;
 	vsc->dev = pdev;
+
+	// need to add this line ?
+	struct virtqueue *vq = &sc->sc_vq;
 
 	struct resource *io;
 	int rid,error;
@@ -672,12 +674,12 @@ static int virtio_blk_detach(device_t dev)
 {
 	kprintf("%s \n",__FUNCTION__);
 	struct virtio_blk_softc *sc = device_get_softc(dev);
-	device_t pdev = device_get_parent(sc->dev);
+	device_t pdev = device_get_parent(sc->sc_dev);
 	struct virtio_softc *vsc = device_get_softc(pdev);
-	struct virtqueue *vq = &sc->sc_vq[0];
+	struct virtqueue *vq = &sc->sc_vq;
 	int i;
 
-	for (i=0; i<sc->sc_vq[0].vq_num; i++) {
+	for (i=0; i<sc->sc_vq.vq_num; i++) {
 		struct virtio_blk_req *vr = &sc->sc_reqs[i];
 
 		bus_dmamap_destroy(vsc->payloads_dmat, vr->payload_dmap);
@@ -692,7 +694,7 @@ static int virtio_blk_detach(device_t dev)
 	bus_dma_tag_destroy(vsc->requests_dmat);
 
 	virtio_reset(vsc);
-	virtio_free_vq(vsc, &sc->sc_vq[0]);
+	virtio_free_vq(vsc, &sc->sc_vq);
 
 	/*unload and free virtqueue*/
 	bus_dmamap_unload(vq->vq_dmat, vq->vq_dmamap);
@@ -734,5 +736,3 @@ static devclass_t virtio_blk_devclass;
 
 DRIVER_MODULE(virtio_blk, pci, virtio_blk_driver, virtio_blk_devclass, 0, 0);
 MODULE_VERSION(virtio_blk, 0);
-
-*/
