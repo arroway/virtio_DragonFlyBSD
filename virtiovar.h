@@ -172,7 +172,7 @@ struct virtio_softc {
 	/* set by child */
 	int         (*sc_intrhand)(struct virtio_softc*);
 	/* set by child */
-} *sc;
+};
 
 
 static const char *virtio_device_name[] = {

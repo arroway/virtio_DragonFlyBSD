@@ -992,7 +992,7 @@ static int virtio_attach(device_t dev)
      *
 	 */
 
-	sc = device_get_softc(dev);
+	struct virtio_softc *sc = device_get_softc(dev);
 	int rid, error;
 	device_t child;
 	sc->dev = dev;

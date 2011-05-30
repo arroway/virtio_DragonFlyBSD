@@ -120,7 +120,7 @@ struct virtio_blk_softc {
 	device_t sc_dev;
 
 	struct virtio_softc *sc_virtio;
-	struct virtqueue sc_vq;
+	struct virtqueue sc_vq[1];
 
 	struct virtio_blk_req	*sc_reqs;
 
@@ -168,8 +168,9 @@ static struct dev_ops vbd_disk_ops = {
 
 /* Free descriptor management.
  */
-static struct vq_entry *
-vq_alloc_entry(struct virtqueue *vq)
+
+
+static struct vq_entry * vq_alloc_entry(struct virtqueue *vq)
 {
 	struct vq_entry *qe;
 
@@ -251,13 +252,14 @@ blkvirtio_execute(struct virtio_blk_softc *sc, struct bio *bio)
 			BUS_DMASYNC_PREREAD);
 
 	 
-	virtio_enqueue_p(sc->sc_virtio, vq, slot, vr, vr->cmd_dmap,
-			 0, sizeof(struct virtio_blk_req_hdr),
+	virtio_enqueue_p(sc->sc_virtio, vq, slot, vr->ds_addr, vr->ds_len, vr->cmd_dmap,
+			 (bus_addr_t)0, sizeof(struct virtio_blk_req_hdr),
 			 true);
-	virtio_enqueue(sc->sc_virtio, vq, slot, vr, vr->payload_dmap, !isread);
+	//BUS_SPACE UNRESTRICTED if no restriction
+	virtio_enqueue(sc->sc_virtio, vq, slot, vr->segs, BUS_SPACE_UNRESTRICTED ,vr->payload_dmap, !isread);
 
 	// il manque un argument (ds_addr ou ds_len)
-	virtio_enqueue_p(sc->sc_virtio, vq, slot, vr, vr->cmd_dmap, offsetof(struct virtio_blk_req, vr_status), sizeof(uint8_t), false);
+	virtio_enqueue_p(sc->sc_virtio, vq, slot, vr->ds_addr, vr->ds_len, vr->cmd_dmap, offsetof(struct virtio_blk_req, vr_status), sizeof(uint8_t), false);
 	virtio_enqueue_commit(sc->sc_virtio, vq, slot, true);
  	return 0;
  	
@@ -343,13 +345,13 @@ ld_virtio_vq_done1(struct virtio_blk_softc *sc,
 static int
 ld_virtio_vq_done(struct virtqueue *vq)
 {
-	struct virtio_blk_softc *sc = vq->vq_owner;
-	//struct ld_virtio_softc *sc = device_private(vsc->sc_child);
+	struct virtio_softc *vsc = vq->vq_owner;
+	struct virtio_blk_softc *sc = device_get_softc(vsc->sc_child);
 	int r = 0;
 	int slot;
 
 again:
-	if (virtio_dequeue(sc->sc_virtio, vq, &slot, NULL))
+	if (virtio_dequeue(vsc, vq, &slot, NULL))
 		return r;
 	r = 1;
 
@@ -497,7 +499,8 @@ static int virtio_blk_attach(device_t dev)
 	vsc->dev = pdev;
 
 	// need to add this line ?
-	struct virtqueue *vq = &sc->sc_vq;
+	// warning at compilation -> unused
+	//struct virtqueue *vq = &sc->sc_vq;
 
 	struct resource *io;
 	int rid,error;
@@ -542,7 +545,7 @@ static int virtio_blk_attach(device_t dev)
 		return(1);
 	}
 
-	virtio_device_reset(vsc);
+	virtio_reset(vsc);
 	virtio_set_status(vsc, VIRTIO_CONFIG_DEVICE_STATUS_ACK);
 	virtio_set_status(vsc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER);
 	error = bus_dma_tag_create(NULL,
@@ -603,8 +606,9 @@ static int virtio_blk_attach(device_t dev)
 		return 1;
 	
 	}
-	qsize = sc->sc_vq.vq_num;
-	sc->sc_vq.vq_done = ld_virtio_vq_done;
+
+	qsize = sc->sc_vq[1].vq_num;
+	sc->sc_vq[1].vq_done = ld_virtio_vq_done(sc->sc_vq[1]);
 
 	/* construct the disk_info */
     bzero(&info, sizeof(info));
@@ -645,13 +649,14 @@ static int virtio_blk_attach(device_t dev)
 		return 1;
 	}
 
-	if (ld_virtio_alloc_reqs(vsc, qsize) < 0)
+	if (ld_virtio_alloc_reqs(sc, qsize) < 0)
 	{
 		kprintf("Bad ld_virtio_alloc_reqs\n");
 		return 1;
 	}
 
-	sc->sc_virtio = vsc;
+	if ( ld_virtio_alloc_reqs(sc, qsize) < 0)
+		goto err;
 
 
 	devstat_add_entry(&sc->stats, "vbd", device_get_unit(dev),
@@ -668,6 +673,10 @@ static int virtio_blk_attach(device_t dev)
     disk_setdiskinfo(&sc->disk, &info);
  
 	return 0;
+
+err:
+	vsc->sc_child = (void*)1;
+	return 0;
 }
 
 static int virtio_blk_detach(device_t dev)
@@ -679,7 +688,7 @@ static int virtio_blk_detach(device_t dev)
 	struct virtqueue *vq = &sc->sc_vq;
 	int i;
 
-	for (i=0; i<sc->sc_vq.vq_num; i++) {
+	for (i=0; i<sc->sc_vq[1].vq_num; i++) {
 		struct virtio_blk_req *vr = &sc->sc_reqs[i];
 
 		bus_dmamap_destroy(vsc->payloads_dmat, vr->payload_dmap);
@@ -694,7 +703,7 @@ static int virtio_blk_detach(device_t dev)
 	bus_dma_tag_destroy(vsc->requests_dmat);
 
 	virtio_reset(vsc);
-	virtio_free_vq(vsc, &sc->sc_vq);
+	virtio_free_vq(vsc, &sc->sc_vq[1]);
 
 	/*unload and free virtqueue*/
 	bus_dmamap_unload(vq->vq_dmat, vq->vq_dmamap);
