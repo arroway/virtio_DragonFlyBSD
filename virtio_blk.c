@@ -1,5 +1,5 @@
-//problème de définition de sc_vq dans struct virtio_blk_softc;
-//répercutions dans des appels de fonctions (pointer needed)
+// cast virtio_blk.c:197: warning: format '%lu' expects type 'long unsigned int', but argument 5 has type 'bus_addr_t'
+
 
 /*	$NetBSD$	*/
 
@@ -169,7 +169,7 @@ static struct dev_ops vbd_disk_ops = {
 /* Free descriptor management.
  */
 
-
+/* warning: defined but unused
 static struct vq_entry * vq_alloc_entry(struct virtqueue *vq)
 {
 	struct vq_entry *qe;
@@ -185,6 +185,7 @@ static struct vq_entry * vq_alloc_entry(struct virtqueue *vq)
 
 	return qe;
 }
+*/
 
 
 static void
@@ -194,14 +195,14 @@ map_payload(void *arg, bus_dma_segment_t *segs, int nseg, int error)
 	vr->segs = segs;
 	vr->nseg = nseg;
 	kprintf("%s, %p:%p addr:%lu, len:%lu\n",
-			__FUNCTION__,segs,vr->segs,vr->segs[0].ds_addr, vr->segs[0].ds_len);
+			__FUNCTION__,segs,vr->segs,(unsigned long int)vr->segs[0].ds_addr, (unsigned long int)vr->segs[0].ds_len);
 }
 
 static int
 blkvirtio_execute(struct virtio_blk_softc *sc, struct bio *bio)
 {
 	kprintf("%s %p\n", __FUNCTION__,(void *) bio);
-	struct virtqueue *vq = &sc->sc_vq;
+	struct virtqueue *vq = sc->sc_vq;
 	struct buf *bp = bio->bio_buf;
 	int isread = (bp->b_cmd & BUF_CMD_READ);
 	int r;
@@ -376,7 +377,7 @@ virtio_cmd_helper(void *arg, bus_dma_segment_t *segs, int nseg, int error)
 	req->ds_addr = segs[0].ds_addr;
 	req->ds_len=segs[0].ds_len;	
 	kprintf("%s addr:%p len:%lu nseg:%u\n",
-			__FUNCTION__,(void*) segs[0].ds_addr, segs[0].ds_len, nseg);
+			__FUNCTION__,(void*) segs[0].ds_addr, (unsigned long int)segs[0].ds_len, nseg);
 }
 
 static int
@@ -607,8 +608,8 @@ static int virtio_blk_attach(device_t dev)
 	
 	}
 
-	qsize = sc->sc_vq[1].vq_num;
-	sc->sc_vq[1].vq_done = ld_virtio_vq_done(sc->sc_vq[1]);
+	qsize = sc->sc_vq[0].vq_num;
+	sc->sc_vq[0].vq_done = ld_virtio_vq_done;
 
 	/* construct the disk_info */
     bzero(&info, sizeof(info));
@@ -626,7 +627,7 @@ static int virtio_blk_attach(device_t dev)
 	info.d_media_blksize = DEV_BSIZE;
 	info.d_media_blocks =  
 		virtio_read_device_config_8(vsc, VIRTIO_BLK_CONFIG_CAPACITY);
-	kprintf("Media blocks is %lu\n", info.d_media_blocks);
+	kprintf("Media blocks is %llu\n", (unsigned long long)info.d_media_blocks);
 	if (features & VIRTIO_BLK_F_GEOMETRY) {		
 
 
@@ -685,7 +686,7 @@ static int virtio_blk_detach(device_t dev)
 	struct virtio_blk_softc *sc = device_get_softc(dev);
 	device_t pdev = device_get_parent(sc->sc_dev);
 	struct virtio_softc *vsc = device_get_softc(pdev);
-	struct virtqueue *vq = &sc->sc_vq;
+	struct virtqueue *vq = sc->sc_vq;
 	int i;
 
 	for (i=0; i<sc->sc_vq[1].vq_num; i++) {
