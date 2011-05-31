@@ -1,0 +1,15 @@
+# VirtIO
+device	virtio {}
+attach	virtio at pci
+file	dev/pci/virtio.c	virtio
+
+attach	ld at virtio with ld_virtio
+file	dev/pci/ld_virtio.c	ld_virtio
+
+device	viomb
+attach	viomb at virtio
+file	dev/pci/viomb.c		viomb
+
+device	vioif
+attach	vioif at virtio
+file	dev/pci/if_vioif.c	vioif
