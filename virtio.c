@@ -911,9 +911,6 @@ static int virtio_probe(device_t dev)
 	u_int32_t id = pci_get_device(dev);
 	kprintf("%s %d",__FUNCTION__,id);
 	if (id >= 0x1000  && id <= 0x103f){
-		//debug
-		kprintf("Device id %d is accepted", id); 
-
 		return 0;
 	}
 	
@@ -924,8 +921,6 @@ static int virtio_detach(device_t dev)
 {	
 	
 	struct virtio_softc *sc = device_get_softc(dev);
-	debug("");
-
 
 	/*destroy parent DMA tag*/
 	if (sc->virtio_dmat) 
@@ -978,20 +973,6 @@ virtio_intr(void *arg)
 
 static int virtio_attach(device_t dev)
 {
-    //debug
-	kprintf("We enter virtio_attach");
-
-	//struct virtio_softc *
-
-	/*!
-	 * void * device_get_softc(device_t dev);
-     * Return the driver-specific state of dev.  The softc is automatically
-     * allocated the first time it is requested.
-     *
-     * The pointer to the driver-specific instance variable is returned.
-     *
-	 */
-
 	struct virtio_softc *sc = device_get_softc(dev);
 	int rid, error;
 	device_t child;
@@ -1094,6 +1075,7 @@ static int virtio_attach(device_t dev)
 	}
 	else if (virtio_type == PCI_PRODUCT_VIRTIO_BLOCK) {
 			child = device_add_child(dev, "virtio_blk",0);
+			kprintf("Block dev child added \n");
 	} 
 
 	/*/!\
