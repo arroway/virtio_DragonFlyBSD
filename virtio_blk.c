@@ -738,11 +738,15 @@ static device_method_t virtio_blk_methods[] = {
 static driver_t virtio_blk_driver = {
 //	"virtiobus",
 	"virtio_blk",
-		virtio_blk_methods,
+	virtio_blk_methods,
 	sizeof(struct virtio_blk_softc),
 };
 
 static devclass_t virtio_blk_devclass;
 
-DRIVER_MODULE(virtio_blk, pci, virtio_blk_driver, virtio_blk_devclass, 0, 0);
+//DRIVER_MODULE(virtio_blk, pci, virtio_blk_driver, virtio_blk_devclass, 0, 0);
+//MODULE_VERSION(virtio_blk, 0);
+
+DRIVER_MODULE(virtio_blk, virtiobus,virtio_blk_driver, virtio_blk_devclass, 0, 0);
+MODULE_DEPEND(virtio_blk, virtiobus, 0, 0, 0);
 MODULE_VERSION(virtio_blk, 0);
