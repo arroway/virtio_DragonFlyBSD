@@ -1,4 +1,4 @@
-This project is about to port virtio drivers for DragonFlyBSD from NetBSD source code.
+This project is about porting virtio drivers for DragonFlyBSD from NetBSD source code.
 
 NetBSD_code/: original code, under BSD license.
 old_work/: previous code on virito.c and the virtio blok device driver. It is now outdated.
