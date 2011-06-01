@@ -1,5 +1,3 @@
-/*	$NetBSD$	*/
-
 /*
  * Copyright (c) 2010 Minoura Makoto.
  * All rights reserved.
@@ -59,173 +57,173 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
+ * 
  */
-#ifndef _VIRTIOVAR_H_
-#define	_VIRTIOVAR_H_
 
-//#define VIRTIO_DEBUG 1
+#ifndef _VIRTIOVAR_H_
+#define _VIRTIOVAR_H_
+
+/* change to VIRTIO_DEBUG for dmesg info*/
+#define NO_VIRTIO_DEBUG 
+
 #ifdef VIRTIO_DEBUG 
-# define debug(fmt, args...)	do {kprintf("%s: " fmt, __func__ , ##args);} while(0)
-#else
-# define debug( fmt, args...)
+	#define debug(fmt, args...) do { kprintf("%s: " fmt, __func__ , ##args); } \
+	while(0)
+#else 
+	#define debug( fmt, args...)
 #endif
 
 //#include "virtioreg.h"
 /* Packet header structure */
 struct virtio_net_hdr {
-	uint8_t		flags;
-	uint8_t		gso_type;
-	uint16_t	hdr_len;
-	uint16_t	gso_size;
-	uint16_t	csum_start;
-	uint16_t	csum_offset;
-#if 0
-	uint16_t	num_buffers; /* if VIRTIO_NET_F_MRG_RXBUF enabled */
-#endif
+	uint8_t         flags;
+	uint8_t         gso_type;
+	uint16_t        hdr_len;
+	uint16_t        gso_size;
+	uint16_t        csum_start;
+	uint16_t        csum_offset;
 } __packed;
 
 struct vq_entry {
-	TAILQ_ENTRY(vq_entry)	qe_list; /* free list */
-	uint16_t		qe_index; /* index in vq_desc array */
-	/* followings are used only when it is the `head' entry */
-	int16_t			qe_next;     /* next enq slot */
-	bool			qe_indirect; /* 1 if using indirect */
+	TAILQ_ENTRY(vq_entry)	qe_list;	/* free list */ 
+	uint16_t		qe_index;	/* index in vq_desc array */
+
+	/* followings are used only when it is the `head' entry */ 
+	int16_t			qe_next;	/* next enq slot */ 
+	bool			qe_indirect;	/* 1 if using indirect */ 
 	struct vring_desc	*qe_desc_base;
 };
 
 struct virtqueue {
-	struct virtio_softc	*vq_owner;
-        unsigned int		vq_num; /* queue size (# of entries) */
-	int			vq_index; /* queue number (0, 1, ...) */
+	struct virtio_softc	*vq_owner; 
+	u_int32_t		vq_num;	/* queue size (# of entries) */ 
+	int32_t			vq_index;	/* queue number (0, 1, ...) */
 
 	/* vring pointers (KVA) */
-        struct vring_desc	*vq_desc;
-        struct vring_avail	*vq_avail;
-        struct vring_used	*vq_used;
+	struct vring_desc       *vq_desc;
+	struct vring_avail      *vq_avail;
+	struct vring_used       *vq_used;
 	void			*vq_indirect;
 
 	/* virtqueue allocation info */
 	void			*vq_vaddr;
-	int			vq_availoffset;
-	int			vq_usedoffset;
-	int			vq_indirectoffset;
+	int32_t			 vq_availoffset;
+	int32_t			vq_usedoffset;
+	int32_t			vq_indirectoffset;
 	bus_dma_segment_t	vq_segs[1];
-	unsigned int		vq_bytesize;
+	u_int32_t		vq_bytesize;
 	bus_dma_tag_t		vq_dmat;
 	bus_dmamap_t		vq_dmamap;
-	bus_addr_t			bus_addr;
+	bus_addr_t		bus_addr;
 
-	int			vq_maxsegsize;
-	int			vq_maxnsegs;
+	int32_t			vq_maxsegsize;
+	int32_t			vq_maxnsegs;
 
 	/* free entry management */
 	struct vq_entry		*vq_entries;
-	TAILQ_HEAD(, vq_entry) vq_freelist;
+	TAILQ_HEAD(, vq_entry)	vq_freelist;
 	struct spinlock		vq_freelist_lock;
 
 	/* enqueue/dequeue status */
-	uint16_t		vq_avail_idx;
-	uint16_t		vq_used_idx;
-	int			vq_queued;
+	u_int16_t		vq_avail_idx;
+	u_int16_t		vq_used_idx;
+	int32_t			vq_queued;
 	struct spinlock		vq_aring_lock;
 	struct spinlock		vq_uring_lock;
 
-	/* interrupt handler */
-	int			(*vq_done)(struct virtqueue*);
-
+	int (*vq_done)(struct virtqueue*);	/* interrupt handler */
 };
 
 struct virtio_softc {
-	device_t dev;
-	int rid_ioport;
-	int rid_memory;
-	int rid_irq;
+	device_t		dev;
+	int32_t			rid_ioport;
+	int32_t			rid_memory;
+	int32_t			rid_irq;
 
-	int regs_rid; /* resource id*/
-	struct resource* res_memory;    /* Resource for mem range. */
-	struct resource* res_irq;   /* Resource for irq range. */
-	struct resource* io; 
+	int32_t			regs_rid;	/* resource id*/
+	struct resource		*res_memory;	/* Resource for mem range. */
+	struct resource		*res_irq;	/* Resource for irq range. */
+	struct resource		*io; 
 
-    bus_dma_tag_t       virtio_dmat;/*Master tag*/
+	bus_dma_tag_t		virtio_dmat;	/*Master tag*/
 
-    int         sc_config_offset;
+	int32_t			sc_config_offset;
 
 	bus_space_tag_t		sc_iot;
 	bus_space_handle_t	sc_ioh;
 
-  	int			sc_nvqs; /* set by child */
-	struct virtqueue *sc_vqs;
+	int			sc_nvqs;	/* set by child */
+	struct virtqueue	*sc_vqs;
 
-	bus_dma_tag_t requests_dmat;
-	bus_dmamap_t cmds_dmamap;
-    bus_dma_tag_t payloads_dmat;
+	bus_dma_tag_t		requests_dmat;
+	bus_dmamap_t		cmds_dmamap;
+	bus_dma_tag_t		payloads_dmat;
 
-    vm_paddr_t phys_next;       /* next page from mem range */
-	uint32_t 	sc_features;
-	bool sc_indirect;
+	vm_paddr_t		phys_next;	/* next page from mem range */
+	uint32_t		sc_features;
+	bool			sc_indirect;
 	int			sc_childdevid;
-	device_t		sc_child; /* set by child */
-	//struct virtqueue *sc_vqs;
-	void * virtio_intr;
+	device_t		sc_child;	/* set by child */
+	void			*virtio_intr;
 
-	int         (*sc_config_change)(struct virtio_softc*);
-	/* set by child */
-	int         (*sc_intrhand)(struct virtio_softc*);
-	/* set by child */
+	int (*sc_config_change)(struct virtio_softc*);	/* set by child */
+	int (*sc_intrhand)(struct virtio_softc*);	/* set by child */
 };
 
+/* The standard layout for the ring is a continuous chunk of memory which
+ * looks like this.  We assume num is a power of 2.
+ *
+ * struct vring {
+ * The actual descriptors (16 bytes each)
+ *      struct vring_desc desc[num];
+ *
+ *      // A ring of available descriptor heads with free-running index.
+ *      __u16 avail_flags;
+ *      __u16 avail_idx;
+ *      __u16 available[num];
+ *
+ *      // Padding to the next align boundary.
+ *      char pad[];
+ *
+ *      // A ring of used descriptor heads with free-running index.
+ *      __u16 used_flags;
+ *      __u16 used_idx;
+ *      struct vring_used_elem used[num];
+ * };
+ * Note: for virtio PCI, align is 4096.
+ */
 
-static const char *virtio_device_name[] = {
-	"Unknown (0)",		/* 0 */
-	"Network",		/* 1 */
-	"Block",		/* 2 */
-	"Console",		/* 3 */
-	"Entropy",		/* 4 */
-	"Memory Balloon",	/* 5 */
-	"Unknown (6)",		/* 6 */
-	"Unknown (7)",		/* 7 */
-	"Unknown (8)",		/* 8 */
-	"9P Transport"		/* 9 */
-};
+/* public interface */
+uint32_t	virtio_negotiate_features(struct virtio_softc*, uint32_t);
+void		virtio_set_status(struct virtio_softc *sc, int32_t );
+uint8_t		virtio_read_device_config_1(struct virtio_softc *sc, int index);
+uint16_t	virtio_read_device_config_2(struct virtio_softc *sc, int index);
+uint32_t	virtio_read_device_config_4(struct virtio_softc *sc, int index);
+uint64_t	virtio_read_device_config_8(struct virtio_softc *sc, int index);
+void		virtio_write_device_config_1(struct virtio_softc *sc,
+					     int32_t index, uint8_t value);
 
-#define NDEVNAMES	(sizeof(virtio_device_name)/sizeof(char*))
-
-#define kassert(exp) do { if (__predict_false(!(exp)))	\
-					panic("assertion: %s in %s",	\
-					#exp, __func__); } while (0)
-#define MINSEG_INDIRECT     2 /* use indirect if nsegs >= this value */
-
-
-
-
-int
-virtio_enqueue_p(struct virtio_softc *sc, struct virtqueue *vq, int slot, 
-				 bus_addr_t	ds_addr, bus_size_t	ds_len,		
-				 bus_dmamap_t dmamap, bus_addr_t start, bus_size_t len,	
-				 bool write);
-int
-virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot, 
-			   bus_dma_segment_t *segs, int nseg,
-			   bus_dmamap_t dmamap, 
-			   bool write);
-int virtio_enqueue_prep(struct virtio_softc*, struct virtqueue*, int*);
-void virtio_set_status(struct virtio_softc *sc, int );
-uint32_t virtio_negotiate_features(struct virtio_softc*, uint32_t);
-void virtio_write_device_config_1(struct virtio_softc *sc, int index, uint8_t value);
-uint16_t virtio_read_device_config_2(struct virtio_softc *sc, int index);
-uint32_t virtio_read_device_config_4(struct virtio_softc *sc, int index);
-uint64_t virtio_read_device_config_8(struct virtio_softc *sc, int index);
-uint8_t virtio_read_device_config_1(struct virtio_softc *sc, int index);
-int virtio_alloc_vq(struct virtio_softc*, struct virtqueue*, int, int, int,
+int	virtio_alloc_vq(struct virtio_softc*, struct virtqueue*, int, int, int,
 		    const char*);
-int virtio_free_vq(struct virtio_softc*, struct virtqueue*);
-void virtio_reset(struct virtio_softc *);
-int virtio_enqueue_reserve(struct virtio_softc*, struct virtqueue*, int, int);
-int virtio_enqueue_commit(struct virtio_softc*, struct virtqueue*, int, bool);
-void virtio_stop_vq_intr(struct virtio_softc *, struct virtqueue *);
-void virtio_start_vq_intr(struct virtio_softc *, struct virtqueue *);
-int virtio_dequeue_commit(struct virtio_softc*, struct virtqueue*, int);
-int virtio_dequeue(struct virtio_softc*, struct virtqueue*, int *, int *);
-int virtio_vq_intr(struct virtio_softc *);
+int	virtio_free_vq(struct virtio_softc*, struct virtqueue*);
+void	virtio_reset(struct virtio_softc *);
+
+int	virtio_enqueue_prep(struct virtio_softc*, struct virtqueue*, int*);
+int	virtio_enqueue_p(struct virtio_softc *sc, struct virtqueue *vq,
+			 int slot, bus_addr_t ds_addr, bus_size_t ds_len,
+			 bus_dmamap_t dmamap, bus_addr_t start, bus_size_t len,
+			 bool write);
+int	virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
+		       bus_dma_segment_t *segs, int nseg, bus_dmamap_t dmamap, 
+		       bool write);
+int	virtio_enqueue_reserve(struct virtio_softc*, struct virtqueue*, int, int);
+int	virtio_enqueue_commit(struct virtio_softc*, struct virtqueue*, int, bool);
+
+int	virtio_dequeue_commit(struct virtio_softc*, struct virtqueue*, int);
+int	virtio_dequeue(struct virtio_softc*, struct virtqueue*, int *, int *);
+
+int	virtio_vq_intr(struct virtio_softc *);
+void	virtio_stop_vq_intr(struct virtio_softc *, struct virtqueue *);
+void	virtio_start_vq_intr(struct virtio_softc *, struct virtqueue *);
 
 #endif /* _VIRTIOVAR_H_ */

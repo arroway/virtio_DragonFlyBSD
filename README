@@ -1,0 +1,9 @@
+This project is about to port virtio drivers for DragonFlyBSD from NetBSD source code.
+
+NetBSD_code/: original code, under BSD license.
+old_work/: previous code on virito.c and the virtio blok device driver. It is now outdated.
+
+blk/: the block device driver
+net/: the net device driver - to be completed
+balloon/: the memory ballooning device driver - to be created
+

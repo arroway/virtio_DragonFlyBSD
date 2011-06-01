@@ -131,7 +131,7 @@ struct virtio_blk_softc {
 
 	//added : what for ?
 	bus_dma_segment_t	sc_reqs_segs[1];
-	//kmutex_t	sc_lock;
+	//kmutex_t	sc_lock;<
 
     // Block stuff : for testing
     cdev_t cdev;

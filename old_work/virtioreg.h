@@ -1,3 +1,5 @@
+/*	$NetBSD$	*/
+
 /*
  * Copyright (c) 2010 Minoura Makoto.
  * All rights reserved.
@@ -57,98 +59,92 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
  */
 
 #ifndef _VIRTIOREG_H_
-#define _VIRTIOREG_H_
+#define	_VIRTIOREG_H_
 
 #include <sys/types.h>
 
+#define NBPG 4096 //bytes per page
+
 /* Virtio product id (subsystem) */
-#define PCI_PRODUCT_VIRTIO_NETWORK		1
-#define PCI_PRODUCT_VIRTIO_BLOCK		2
-#define PCI_PRODUCT_VIRTIO_CONSOLE		3
-#define PCI_PRODUCT_VIRTIO_ENTROPY		4
-#define PCI_PRODUCT_VIRTIO_BALLOON		5
-#define PCI_PRODUCT_VIRTIO_9P			9
+#define PCI_PRODUCT_VIRTIO_NETWORK	1
+#define PCI_PRODUCT_VIRTIO_BLOCK	2
+#define PCI_PRODUCT_VIRTIO_CONSOLE	3
+#define PCI_PRODUCT_VIRTIO_ENTROPY	4
+#define PCI_PRODUCT_VIRTIO_BALLOON	5
+#define PCI_PRODUCT_VIRTIO_9P		9
 
 /* Virtio header */
-#define VIRTIO_CONFIG_DEVICE_FEATURES		0	/* 32bit */
-#define VIRTIO_CONFIG_GUEST_FEATURES		4	/* 32bit */
-#define VIRTIO_F_NOTIFY_ON_EMPTY		(1<<24)
-#define VIRTIO_F_RING_INDIRECT_DESC		(1<<28)
-#define VIRTIO_F_BAD_FEATURE			(1<<30)
-#define VIRTIO_CONFIG_QUEUE_ADDRESS		8	/* 32bit */
-#define VIRTIO_CONFIG_QUEUE_SIZE		12	/* 16bit */
-#define VIRTIO_CONFIG_QUEUE_SELECT		14	/* 16bit */
-#define VIRTIO_CONFIG_QUEUE_NOTIFY		16	/* 16bit */
-#define VIRTIO_CONFIG_DEVICE_STATUS		18	/* 8bit */
-#define VIRTIO_CONFIG_DEVICE_STATUS_RESET	0
-#define VIRTIO_CONFIG_DEVICE_STATUS_ACK		1
-#define VIRTIO_CONFIG_DEVICE_STATUS_DRIVER	2
-#define VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK	4
-#define VIRTIO_CONFIG_DEVICE_STATUS_FAILED	128
-#define VIRTIO_CONFIG_ISR_STATUS		19 /* 8bit */
-#define VIRTIO_CONFIG_ISR_CONFIG_CHANGE		2
-#define VIRTIO_CONFIG_CONFIG_VECTOR		20 /* 16bit, optional */
+#define VIRTIO_CONFIG_DEVICE_FEATURES	0 /* 32bit */
+#define VIRTIO_CONFIG_GUEST_FEATURES	4 /* 32bit */
+#define  VIRTIO_F_NOTIFY_ON_EMPTY		(1<<24)
+#define  VIRTIO_F_RING_INDIRECT_DESC		(1<<28)
+#define  VIRTIO_F_BAD_FEATURE			(1<<30)
+#define VIRTIO_CONFIG_QUEUE_ADDRESS	8 /* 32bit */
+#define VIRTIO_CONFIG_QUEUE_SIZE	12 /* 16bit */
+#define VIRTIO_CONFIG_QUEUE_SELECT	14 /* 16bit */
+#define VIRTIO_CONFIG_QUEUE_NOTIFY	16 /* 16bit */
+#define VIRTIO_CONFIG_DEVICE_STATUS	18 /* 8bit */
+#define  VIRTIO_CONFIG_DEVICE_STATUS_RESET	0
+#define  VIRTIO_CONFIG_DEVICE_STATUS_ACK	1
+#define  VIRTIO_CONFIG_DEVICE_STATUS_DRIVER	2
+#define  VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK	4
+#define  VIRTIO_CONFIG_DEVICE_STATUS_FAILED	128
+#define VIRTIO_CONFIG_ISR_STATUS	19 /* 8bit */
+#define  VIRTIO_CONFIG_ISR_CONFIG_CHANGE	2
+#define VIRTIO_CONFIG_CONFIG_VECTOR	20 /* 16bit, optional */
 #define VIRTIO_CONFIG_DEVICE_CONFIG_NOMSI	20
 #define VIRTIO_CONFIG_DEVICE_CONFIG_MSI		22
 
-/*
-* Virtqueue 
-*/
-
+/* Virtqueue */
 /* This marks a buffer as continuing via the next field. */
-#define VRING_DESC_F_NEXT		1
-
+#define VRING_DESC_F_NEXT       1
 /* This marks a buffer as write-only (otherwise read-only). */
-#define VRING_DESC_F_WRITE		2
-
+#define VRING_DESC_F_WRITE      2
 /* This means the buffer contains a list of buffer descriptors. */
-#define VRING_DESC_F_INDIRECT		4
+#define VRING_DESC_F_INDIRECT	4
 
-/*
- * The Host uses this in used->flags to advise the Guest: don't kick me
+/* The Host uses this in used->flags to advise the Guest: don't kick me
  * when you add a buffer.  It's unreliable, so it's simply an
- * optimization.  Guest will still kick if it's out of buffers.
- */ 
-#define VRING_USED_F_NO_NOTIFY		1
-
-/*
- * The Guest uses this in avail->flags to advise the Host: don't
+ * optimization.  Guest will still kick if it's out of buffers. */
+#define VRING_USED_F_NO_NOTIFY  1
+/* The Guest uses this in avail->flags to advise the Host: don't
  * interrupt me when you consume a buffer.  It's unreliable, so it's
- * simply an optimization.
- */ 
-#define VRING_AVAIL_F_NO_INTERRUPT	1
-
-/*
- * Virtio ring descriptors: 16 bytes.
- * These can chain together via "next". 
- */ 
+ * simply an optimization.  */
+#define VRING_AVAIL_F_NO_INTERRUPT      1
+/* Virtio ring descriptors: 16 bytes.
+ * These can chain together via "next". */
 struct vring_desc {
-	u_int64_t	addr;	/* Address (guest-physical). */
-	u_int32_t	len;	/* Length. */
-	u_int16_t	flags;	/* The flags as indicated above. */
-	u_int16_t	next;	/* We chain unused descriptors via this, too */
+        /* Address (guest-physical). */
+        uint64_t addr;
+        /* Length. */
+        uint32_t len;
+        /* The flags as indicated above. */
+        uint16_t flags;
+        /* We chain unused descriptors via this, too */
+        uint16_t next;
 } __packed;
 
 struct vring_avail {
-	u_int16_t	flags;
-	u_int16_t	idx;
-	u_int16_t	ring[0];
+        uint16_t flags;
+        uint16_t idx;
+        uint16_t ring[0];
 } __packed;
 
 /* u32 is used here for ids for padding reasons. */
 struct vring_used_elem {
-	u_int32_t	id; /* Index of start of used descriptor chain. */
-	u_int32_t	len; /* Tot len of the descriptor chain written to. */
+        /* Index of start of used descriptor chain. */
+        uint32_t id;
+        /* Total length of the descriptor chain which was written to. */
+        uint32_t len;
 } __packed;
 
-struct vring_used {	
-	u_int16_t	flags; 
-	u_int16_t	idx; 
-	struct vring_used_elem	ring[0];
+struct vring_used {
+        uint16_t flags;
+        uint16_t idx;
+        struct vring_used_elem ring[0];
 } __packed;
 
 #define VIRTIO_PAGE_SIZE	(4096)
