@@ -283,7 +283,7 @@ virtio_disk_strategy(struct dev_strategy_args *ap)
 	vbb->bio = bio;
 
 	/*
-	* Queue an I/O request. Enfoce that only qsize
+	* Queue an I/O request. Enforce that only qsize
 	* slots are used
 	*/
 	spin_lock(&sc->vbb_queue_lock);

@@ -45,7 +45,6 @@
 #include "virtiovar.h"
 #include "virtioreg.h"
 
-MODULE_VERSION(virtiobus, 0);
 static const char *virtio_device_name[] = {
 	"Unknown (0)",	/* 0 */
 	"Network",	/* 1 */
@@ -87,6 +86,7 @@ static int              virtio_probe(device_t dev);
 static int              virtio_detach(device_t dev);
 static int              virtio_intr(void *arg);
 static int              virtio_attach(device_t dev);
+
 
 void virtio_set_status(struct virtio_softc *sc, int status)
 {
@@ -685,7 +685,7 @@ virtio_dequeue_commit(struct virtio_softc *sc, struct virtqueue *vq, int slot)
 	int s = slot;
 
 	while (vd[s].flags & VRING_DESC_F_NEXT) {
-		kprintf("vringdescnext\n");
+		//kprintf("vringdescnext\n");
 		s = vd[s].next;
 		vq_free_entry(vq, qe);
 		qe = &vq->vq_entries[s];
@@ -887,3 +887,4 @@ static driver_t virtio_driver = {
 static devclass_t virtio_devclass;
 
 DRIVER_MODULE(virtiobus, pci, virtio_driver, virtio_devclass, 0, 0);
+MODULE_VERSION(virtiobus, 0);
