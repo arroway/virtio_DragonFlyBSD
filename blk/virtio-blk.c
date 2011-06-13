@@ -199,6 +199,8 @@ virtio_blk_execute(struct virtio_blk_softc *sc)
 
 	r = virtio_enqueue_prep(vsc, vq, &slot);
 	if (r != 0) {
+		kprintf("%u slots\n", slot);
+		kprintf("virtio_blk_execute: no slot available in vq.\n We requeue.\n ");
 		/* We need to requeue this guy as there was no slot*/
 		spin_lock(&sc->vbb_queue_lock);
 		TAILQ_INSERT_TAIL(&sc->vbb_queue, vbb, vbb_list);
@@ -208,7 +210,7 @@ virtio_blk_execute(struct virtio_blk_softc *sc)
 	}
 
 	bio = vbb->bio;
-	kfree(vbb, M_DEVBUF);
+	//kfree(vbb, M_DEVBUF);
 	bp = bio->bio_buf;
 	vr = &sc->sc_reqs[slot];
 	isread= (bp->b_cmd & BUF_CMD_READ);
@@ -232,11 +234,20 @@ virtio_blk_execute(struct virtio_blk_softc *sc)
 		return r;
 	}
 
+	// pourquoi vr->nseg + 2 ?
 	r = virtio_enqueue_reserve(vsc, vq, slot, vr->nseg + 2);
 	if (r != 0) {
 		kprintf("Bad enqueue_reserve\n");
+
+		//we enqueue again vbb in vbb_list
+		spin_lock(&sc->vbb_queue_lock);
+		TAILQ_INSERT_TAIL(&sc->vbb_queue, vbb, vbb_list);
+		spin_unlock(&sc->vbb_queue_lock);
 		return r;
 	}
+
+	kfree(vbb, M_DEVBUF);
+
 	vr->vr_bp = bp;
 	vr->vr_hdr.type = isread?VIRTIO_BLK_T_IN:VIRTIO_BLK_T_OUT;
 	vr->vr_hdr.ioprio = 0;
@@ -290,6 +301,7 @@ virtio_disk_strategy(struct dev_strategy_args *ap)
 	TAILQ_INSERT_TAIL(&sc->vbb_queue, vbb, vbb_list);
 	spin_unlock(&sc->vbb_queue_lock);
 
+
 	virtio_blk_execute(sc);
 	return(0); 
 }
@@ -297,12 +309,16 @@ virtio_disk_strategy(struct dev_strategy_args *ap)
 static int
 virtio_disk_close(struct dev_close_args *ap)
 {
+
+	//decr cdev->usecount
+	//in detach: only unload if the counter is = 0
 	debug("%s\n", __FUNCTION__);
 	return 0;
 }
 static int
 virtio_disk_open(struct dev_open_args *ap)
 {
+	//incr cdev->usecount
 	debug("%s\n", __FUNCTION__);
 	return 0;
 }

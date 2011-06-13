@@ -395,6 +395,7 @@ vq_sync_descs(struct virtio_softc *sc, struct virtqueue *vq, int ops)
 static void
 vq_free_entry(struct virtqueue *vq, struct vq_entry *qe)
 {
+	kprintf("call of q_free_entry(): vq_num=%u", vq->vq_num);
 	spin_lock(&vq->vq_freelist_lock);
 	TAILQ_INSERT_TAIL(&vq->vq_freelist, qe, qe_list);
 	spin_unlock(&vq->vq_freelist_lock);
