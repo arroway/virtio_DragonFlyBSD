@@ -74,15 +74,6 @@
 #endif
 
 //#include "virtioreg.h"
-/* Packet header structure */
-struct virtio_net_hdr {
-	uint8_t         flags;
-	uint8_t         gso_type;
-	uint16_t        hdr_len;
-	uint16_t        gso_size;
-	uint16_t        csum_start;
-	uint16_t        csum_offset;
-} __packed;
 
 struct vq_entry {
 	TAILQ_ENTRY(vq_entry)	qe_list;	/* free list */ 
