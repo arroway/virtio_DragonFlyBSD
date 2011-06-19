@@ -644,10 +644,13 @@ virtio_blk_detach(device_t dev)
 	bus_dma_tag_destroy(vsc->requests_dmat);
 
 	virtio_reset(vsc);
+
 	virtio_free_vq(vsc, &sc->sc_vq[0]);
 
 	/*unload and free virtqueue*/
-	kfree(vq->vq_entries, M_DEVBUF);
+	/* bug fix */
+	// freed twice
+	//kfree(vq->vq_entries, M_DEVBUF);
 	bus_dmamap_unload(vq->vq_dmat, vq->vq_dmamap);
 	bus_dmamem_free(vq->vq_dmat, vq->vq_vaddr, vq->vq_dmamap);
 	bus_dma_tag_destroy(vq->vq_dmat);
@@ -666,7 +669,7 @@ static device_method_t virtio_blk_methods[] = {
 	DEVMETHOD(device_probe,		virtio_blk_probe),
 	DEVMETHOD(device_attach,	virtio_blk_attach),
 	DEVMETHOD(device_detach,	virtio_blk_detach),
-	{ 0, 0}
+	{ 0, 0 }
 };
 
 static driver_t virtio_blk_driver = {

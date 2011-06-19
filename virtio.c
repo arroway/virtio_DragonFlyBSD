@@ -193,6 +193,7 @@ virtio_free_vq(struct virtio_softc *sc, struct virtqueue *vq)
 	 * device must be already deactivated
 	 * confirm the vq is empty
 	 */ 
+
 	TAILQ_FOREACH(qe, &vq->vq_freelist, qe_list) {
 		i++;
 	}
