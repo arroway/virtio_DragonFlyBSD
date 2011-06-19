@@ -70,8 +70,7 @@
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <net/if.h>
-#include <net/if_vars.h>
-#include <net/if_types.h>
+#include <net/ifq_var.h>
 
 #include <sys/spinlock.h>
 #include <sys/spinlock2.h>
@@ -227,7 +226,7 @@ static int	vioif_set_allmulti(struct vioif_softc *, bool);
 static int	vioif_set_rx_filter(struct vioif_softc *);
 static int	vioif_rx_filter(struct vioif_softc *);
 static int	vioif_ctrl_vq_done(struct virtqueue *);
-static int vioif_destroy_vq(virtio_net_softc *, virtio_softc *, int){
+static int  vioif_destroy_vq(struct virtio_net_softc *, struct virtio_softc *, int);
 
 
 
