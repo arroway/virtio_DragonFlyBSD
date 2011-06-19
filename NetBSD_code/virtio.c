@@ -522,7 +522,7 @@ virtio_init_vq(struct virtio_softc *sc, struct virtqueue *vq)
  * Allocate/free a vq.
  */
 int
-virtio_alloc_vq(struct virtio_softc *sc,
+(struct virtio_softc *sc,
 		struct virtqueue *vq, int index, int maxsegsize, int maxnsegs,
 		const char *name)
 {
