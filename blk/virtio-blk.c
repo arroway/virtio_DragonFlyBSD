@@ -129,7 +129,6 @@ struct virtio_blk_softc {
 	struct disk		disk;
 
 	struct virtio_blk_req	*sc_reqs;
-
 	/*throttle outstanding ios*/
 	TAILQ_HEAD(, virtio_blk_bio)	vbb_queue;	
 	struct spinlock		vbb_queue_lock;

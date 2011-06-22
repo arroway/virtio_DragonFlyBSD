@@ -1,19 +1,3 @@
-/*
- * written: probe, attach
- * to be tested: probe, attach
- *
- * current: detach (entirely created)
- * next: vioif_rx_vq_done, vioif_tx_vq_done, vioif_ctrl_vq_done
- * virtio_start_vq_intr, virtio_stop_vq_intr, vioif_deferred_init
- * ifnet functions
- *
- * check if_attach and ether_ifattach
- *
- * */
-
-
-
-
 /* $NetBSD$	*/
 
 /*
@@ -57,7 +41,7 @@
 #include <sys/buf.h>
 #include <sys/devicestat.h>
 #include <sys/condvar.h>
-#include <sys/mutex2.h>
+//#include <sys/mutex2.h>
 #include <sys/sockio.h>
 #include <sys/resource.h>
 #include <sys/types.h>
@@ -71,14 +55,22 @@
 #include <sys/socket.h>
 #include <net/if.h>
 #include <net/ifq_var.h>
+#include <net/if_arp.h>
 
 #include <sys/spinlock.h>
 #include <sys/spinlock2.h>
+#include <sys/kthread.h>
+#include <sys/serialize.h>
+#include <sys/msgport.h>
+#include <sys/msgport2.h>
+#include <sys/mplock2.h>
+
+
 
 #include "virtiovar.h"
 #include "virtioreg.h"
 
-#define ether_sprintf(x) "<dummy>"
+//y#define ether_sprintf(x) "<dummy>"
 /*
  * if_vioifreg.h:
  */
@@ -117,6 +109,9 @@
 #define VIRTIO_NET_HDR_GSO_ECN		0x80 /* gso_type, |'ed */
 
 #define VIRTIO_NET_MAX_GSO_LEN		(65536+ETHER_HDR_LEN)
+#define VIRTIO_NET_TX_MAXNSEGS		(16) /* XXX */
+#define VIRTIO_NET_CTRL_MAC_MAXENTRIES	(64) /* XXX */
+
 
 #define RX_VQ 0
 #define TX_VQ 1
@@ -140,67 +135,72 @@ struct virtio_net_hdr {
 
 }__packed;
 
-struct virtio_net_softc {
-	device_t		dev;
+struct vioif_softc {
+	device_t dev;
 	struct virtio_softc *sc_virtio;
 	struct virtqueue sc_vq[3];
 	int sc_readonly;
-	uint32_t    sc_features;
-	int     maxxfersize;
-	short			sc_ifflags;
+	uint32_t sc_features;
+	int maxxfersize;
 
 	/* net specific */
 	short sc_ifflags;
 	uint8_t sc_mac[ETHER_ADDR_LEN];
-	struct ethercom	sc_ethercom;
+	struct arpcom sc_arpcom;
 
 
 
 	bus_dma_segment_t	sc_hdr_segs[1];
-		struct virtio_net_hdr	*sc_hdrs;
+	struct virtio_net_hdr	*sc_hdrs;
 	#define sc_rx_hdrs	sc_hdrs
-		struct virtio_net_hdr	*sc_tx_hdrs;
-		struct virtio_net_ctrl_cmd *sc_ctrl_cmd;
-		struct virtio_net_ctrl_status *sc_ctrl_status;
-		struct virtio_net_ctrl_rx *sc_ctrl_rx;
-		struct virtio_net_ctrl_mac_tbl *sc_ctrl_mac_tbl_uc;
-		struct virtio_net_ctrl_mac_tbl *sc_ctrl_mac_tbl_mc;
+	struct virtio_net_hdr	*sc_tx_hdrs;
+	struct virtio_net_ctrl_cmd *sc_ctrl_cmd;
+	struct virtio_net_ctrl_status *sc_ctrl_status;
+	struct virtio_net_ctrl_rx *sc_ctrl_rx;
+	struct virtio_net_ctrl_mac_tbl *sc_ctrl_mac_tbl_uc;
+	struct virtio_net_ctrl_mac_tbl *sc_ctrl_mac_tbl_mc;
 
-		/* kmem */
-		bus_dmamap_t		*sc_arrays;
+	/* kmem */
+	bus_dmamap_t		*sc_arrays;
     #define sc_rxhdr_dmamaps sc_arrays
-		bus_dmamap_t		*sc_txhdr_dmamaps;
-		bus_dmamap_t		*sc_rx_dmamaps;
-		bus_dmamap_t		*sc_tx_dmamaps;
-		struct mbuf		**sc_rx_mbufs;
-		struct mbuf		**sc_tx_mbufs;
-
-		bus_dmamap_t		sc_ctrl_cmd_dmamap;
+	bus_dmamap_t		*sc_txhdr_dmamaps;
+	bus_dmamap_t		*sc_rx_dmamaps;
+	bus_dmamap_t		*sc_tx_dmamaps;
+	struct mbuf		**sc_rx_mbufs;
+	struct mbuf		**sc_tx_mbufs;
+	bus_dmamap_t		sc_ctrl_cmd_dmamap;
 		bus_dmamap_t		sc_ctrl_status_dmamap;
 		bus_dmamap_t		sc_ctrl_rx_dmamap;
 		bus_dmamap_t		sc_ctrl_tbl_uc_dmamap;
 		bus_dmamap_t		sc_ctrl_tbl_mc_dmamap;
 
-		void			*sc_rx_softint;
-
-		enum {
+		enum  {
 			FREE, INUSE, DONE
-		}			sc_ctrl_inuse;
-		kcondvar_t		sc_ctrl_wait;
-		kmutex_t		sc_ctrl_wait_lock;
+		} sc_ctrl_inuse;
+		//kcondvar_t		sc_ctrl_wait;
+		//kmutex_t		sc_ctrl_wait_lock;
+		struct spinlock sc_ctrl_wait_lock;
+		lwkt_serialize_t sc_serializer;
 
+		/* LWKT messages*/
+		struct lwkt_msg	sc_lmsg;
+		struct lwkt_port sc_port;
+		struct lock sc_lock;
+		struct thread *sc_td;
+		int sc_run;
+		lwkt_msg sc_msg;
 
 };
 
 /* Declarations */
 
-void virtio_net_identify(driver_t *driver, device_t parent);
-static int virtio_net_attach(device_t dev);
-static int virtio_net_detach(device_t dev);
+void vioif_identify(driver_t *driver, device_t parent);
+static int vioif_attach(device_t dev);
+static int vioif_detach(device_t dev);
 
 /* ifnet interface functions */
 static int	vioif_init(struct ifnet *);
-static void	vioif_stop(struct ifnet *, int);
+static void	vioif_down(struct ifnet *, int);
 static void	vioif_start(struct ifnet *);
 static int	vioif_ioctl(struct ifnet *, u_long, void *);
 static void	vioif_watchdog(struct ifnet *);
@@ -211,7 +211,7 @@ static void	vioif_free_rx_mbuf(struct vioif_softc *, int);
 static void	vioif_populate_rx_mbufs(struct vioif_softc *);
 static int	vioif_rx_deq(struct vioif_softc *);
 static int	vioif_rx_vq_done(struct virtqueue *);
-static void	vioif_rx_softint(void *);
+static void	vioif_rx_thread(void *);
 static void	vioif_rx_drain(struct vioif_softc *);
 
 /* tx */
@@ -226,80 +226,139 @@ static int	vioif_set_allmulti(struct vioif_softc *, bool);
 static int	vioif_set_rx_filter(struct vioif_softc *);
 static int	vioif_rx_filter(struct vioif_softc *);
 static int	vioif_ctrl_vq_done(struct virtqueue *);
-static int  vioif_destroy_vq(struct virtio_net_softc *, struct virtio_softc *, int);
+static int  vioif_destroy_vq(struct vioif_softc *, struct virtio_softc *, int);
+static void vioif_deferred_init(device_t );
 
-
-
-
-/*
-uint32_t
-virtio_negotiate_feature(struct virtio_net_softc *sc, uint32_t guest_features)
-{
-	uint32_t r;
-
-	guest_features |= VIRTIO_F_RING_INDIRECT_DESC;
-	kprintf("and INDIRECT features");
-
-	r = bus_space_read_4(sc->sc_iot, sc->sc_ioh,
-				VIRTIO_CONFIG_DEVICE_FEATURES);
-	kprintf("%s: r:0x%x.......x410f0020\n",__FUNCTION__,r);
-	r &=guest_features;
-
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
-			VIRTIO_CONFIG_GUEST_FEATURES, r);
-	sc->sc_features = r;
-	if (r & VIRTIO_F_RING_INDIRECT_DESC) {
-		kprintf("%s: indirect true\n", __FUNCTION__);
-		sc->sc_indirect = true;
-	}
-	else {
-		kprintf("%s: indirect false\n",__FUNCTION__);
-		sc->sc_indirect = false;
-	}
-	return r;
-}*/
 
 static int
-vioif_init(struct ifnet *ifp){
+vioif_init(struct ifnet *ifp)
+{
 
 	struct vioif_softc *sc = ifp->if_softc;
 
-	vioif_stop(ifp, 0);
+	vioif_down(ifp, 0);
 	vioif_populate_rx_mbufs(sc);
-	vioif_updown
+	vioif_updown;
     kprintf("%s\n",__FUNCTION__);
 
     return 0;
 }
 
 static void
-vioif_stop(struct ifnet *, int){
+vioif_down(struct ifnet *ifp, int cmd)
+{
 
     kprintf("%s\n",__FUNCTION__);
-    return 0;
 }
 
 static void
-vioif_start(struct ifnet *){
+vioif_start(struct ifnet *ifp)
+{
 
     kprintf("%s\n",__FUNCTION__);
-    return 0;
 }
 
 static int
-vioif_ioctl(struct ifnet *, u_long, void *){
+vioif_ioctl(struct ifnet *ifp, u_long cmd, void *data)
+{
 
     kprintf("%s\n",__FUNCTION__);
     return 0;
 }
 
 static void
-vioif_watchdog(struct ifnet *){
+vioif_watchdog(struct ifnet *ifp)
+{
 
-    kprintf("%s\n",__FUNCTION__);
-    return 0;
+	struct vioif_softc *sc = ifp->if_softc;
+
+	if (ifp->if_flags & IFF_RUNNING)
+		vioif_tx_vq_done(&sc->sc_vq[1]);
 }
 
+
+/* lwkt_msg is used to "pock" vioif_rx_thread and tell it
+ * to execute vioif_populate_rx_mbuf */
+
+static int
+vioif_rx_vq_done(struct virtqueue *vq)
+{
+
+	struct virtio_softc *vsc = vq->vq_owner;
+	struct vioif_softc *sc = device_get_softc(vsc->sc_child);
+	int r = 0;
+	struct lwkt_port rep_port;
+
+	lwkt_initmsg(&sc->sc_lmsg, &sc->sc_port, 0);
+	lwkt_initmsg(&(sc->sc_lmsg->hdr), &rep_port, 0);
+
+	r = vioif_rx_deq(sc);
+	if (r)
+		lwkt_sendmsg(&sc->sc_port, &sc->sc_lmsg);
+
+	return r;
+}
+
+static void
+vioif_rx_thread(void *arg)
+{
+
+	device_t dev = arg;
+	struct vioif_softc *sc = device_get_softc(dev);
+	device_t pdev = device_get_parent(dev);
+	struct virtio_softc *vsc = device_get_softc(pdev);
+
+	lwkt_initport_thread(&sc->sc_port, curthread);
+
+	lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
+	sc->sc_run = 1;
+	wakeup(sc->sc_td);
+	lockmgr(&sc->sc_lock, LK_RELEASE);
+
+	get_mplock();
+
+	while(sc->sc_run){
+		sc->sc_msg = (lwkt_msg)lwkt_waitport(&sc->sc_port, 0); /* ? */
+		vioif_populate_rx_mbufs(sc);
+		lwkt_replymsg(&sc->sc_msg->hdr, 0);
+	}
+
+}
+
+/*
+ * Transmission implementation
+ */
+
+
+
+
+static int
+vioif_tx_vq_done(struct virtqueue *vq)
+{
+	struct virtio_softc *vsc = vq->vq_owner;
+	struct vioif_softc *sc = device_get_softc(vsc->sc_child);
+	struct ifnet *ifp = &sc->sc_arpcom.ac_if;
+
+	struct mbuf *m;
+	int r = 0;
+	int slot, len;
+
+	while (virtio_dequeue(vsc, vq, &slot, &len) == 0){
+		r++;
+		bus_dmamap_sync(vsc->requests_dmat, sc->sc_txhdr_dmamaps[slot], BUS_DMASYNC_POSTWRITE);
+		bus_dmamap_sync(vsc->requests_dmat, sc->sc_tx_dmamaps[slot], BUS_DMASYNC_POSTWRITE);
+		m = sc->sc_tx_mbufs[slot];
+		bus_dmamap_unload(vsc->requests_dmat, sc->sc_tx_dmamaps[slot]);
+		sc->sc_tx_mbufs[slot] = 0;
+		virtio_dequeue_commit(vsc, vq, slot);
+		ifp->if_opackets++;
+		m_freem(m);
+	}
+
+	if (r)
+		ifp->if_flags &= ~IFF_OACTIVE;
+	return r;
+}
 
 
 static int
@@ -311,7 +370,7 @@ virtio_net_probe(device_t dev)
 	if(pci_read_config(dev,PCIR_SUBDEV_0,2) == PCI_PRODUCT_VIRTIO_NETWORK) {
 		debug("parent:%p is net\n", pdev);
 	} else {
-		debug("parent:%p is not net\n");
+		debug("parent:%p is not net\n", pdev);
 		return 1;
 	}
 
@@ -324,25 +383,27 @@ static int
 virtio_net_attach(device_t dev)
 {
 
-	struct virtio_net_softc *sc = device_get_softc(dev);
+	struct vioif_softc *sc = device_get_softc(dev);
 	device_t pdev = device_get_parent(dev);
 	struct virtio_softc *vsc = device_get_softc(pdev);
 	uint32_t features;
-	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
+	struct ifnet *ifp = &sc->sc_arpcom.ac_if;
 	int error;
-	struct resource *io;
+	//struct resource *io;
 
 	debug("");
 
 //	int  qsize;
 
+	lwkt_serialize_init(sc->sc_serializer);
 	sc->dev = dev;
 	sc->sc_virtio = vsc;
 
 	vsc->sc_vqs = &sc->sc_vq[RX_VQ];
 	vsc->sc_config_change = 0;
 	vsc->sc_child = dev;
-	vsc->sc_ipl = IPL_NET;
+	//vsc->sc_ipl = IPL_NET;
+	//vsc->sc_ipl = 5 ;
 
 	vsc->sc_config_change = 0; /* keep it?*/
 	vsc->sc_intrhand = virtio_vq_intr;
@@ -356,17 +417,17 @@ virtio_net_attach(device_t dev)
 						 VIRTIO_NET_F_CTRL_RX |
 						 VIRTIO_F_NOTIFY_ON_EMPTY));
 		if (features & VIRTIO_NET_F_MAC) {
-			sc->sc_mac[0] = virtio_read_device_config(vsc,
+			sc->sc_mac[0] = virtio_read_device_config_1(vsc,
 							    VIRTIO_NET_CONFIG_MAC+0);
-			sc->sc_mac[1] = virtio_read_device_config(vsc,
+			sc->sc_mac[1] = virtio_read_device_config_1(vsc,
 							    VIRTIO_NET_CONFIG_MAC+1);
-			sc->sc_mac[2] = virtio_read_device_config(vsc,
+			sc->sc_mac[2] = virtio_read_device_config_1(vsc,
 							    VIRTIO_NET_CONFIG_MAC+2);
-			sc->sc_mac[3] = virtio_read_device_config(vsc,
+			sc->sc_mac[3] = virtio_read_device_config_1(vsc,
 							    VIRTIO_NET_CONFIG_MAC+3);
-			sc->sc_mac[4] = virtio_read_device_config(vsc,
+			sc->sc_mac[4] = virtio_read_device_config_1(vsc,
 							    VIRTIO_NET_CONFIG_MAC+4);
-			sc->sc_mac[5] = virtio_read_device_config(vsc,
+			sc->sc_mac[5] = virtio_read_device_config_1(vsc,
 							    VIRTIO_NET_CONFIG_MAC+5);
 		} else {
 			/* code stolen from sys/net/if_tap.c */
@@ -374,33 +435,34 @@ virtio_net_attach(device_t dev)
 			uint32_t ui;
 			getmicrouptime(&tv);
 			ui = (tv.tv_sec ^ tv.tv_usec) & 0xffffff;
-			memcpy(vsc->sc_mac+3, (uint8_t *)&ui, 3);
-			virtio_write_device_config(vsc,
+			memcpy(sc->sc_mac+3, (uint8_t *)&ui, 3);
+			virtio_write_device_config_1(vsc,
 						     VIRTIO_NET_CONFIG_MAC+0,
-						     vsc->sc_mac[0]);
-			virtio_write_device_config(vsc,
+						     sc->sc_mac[0]);
+			virtio_write_device_config_1(vsc,
 						     VIRTIO_NET_CONFIG_MAC+1,
-						     vsc->sc_mac[1]);
-			virtio_write_device_config(vsc,
+						     sc->sc_mac[1]);
+			virtio_write_device_config_1(vsc,
 						     VIRTIO_NET_CONFIG_MAC+2,
-						     vsc->sc_mac[2]);
-			virtio_write_device_config(vsc,
+						     sc->sc_mac[2]);
+			virtio_write_device_config_1(vsc,
 						     VIRTIO_NET_CONFIG_MAC+3,
-						     vsc->sc_mac[3]);
-			virtio_write_device_config(vsc,
+						     sc->sc_mac[3]);
+			virtio_write_device_config_1(vsc,
 						     VIRTIO_NET_CONFIG_MAC+4,
-						     vsc->sc_mac[4]);
-			virtio_write_device_config(vsc,
+						     sc->sc_mac[4]);
+			virtio_write_device_config_1(vsc,
 						     VIRTIO_NET_CONFIG_MAC+5,
-						     vsc->sc_mac[5]);
+						     sc->sc_mac[5]);
 		}
 
 	kprintf(":Ethernet address %s\n", ether_sprintf(sc->sc_mac));
 
 	kprintf("Attach started ->> %s\n",__FUNCTION__);
 
+
 	/* Virtqueue allocation for the rx queue. */
-	error = virtio_alloc_vq(sc,&sc->sc_vq[RX_VQ],0,
+	error = virtio_alloc_vq(vsc,&sc->sc_vq[RX_VQ],0,
 				MCLBYTES+sizeof(struct virtio_net_hdr),2,
 				"rx vq");
 	if (error != 0)	{
@@ -409,6 +471,7 @@ virtio_net_attach(device_t dev)
 	}
 	vsc->sc_nvqs = 1;
 	sc->sc_vq[RX_VQ].vq_done = vioif_rx_vq_done; /* rx interrupt*/
+
 
 	/* Virtqueue allocation for the tx queue. */
 	error = virtio_alloc_vq(vsc, &sc->sc_vq[TX_VQ], 1,
@@ -424,14 +487,14 @@ virtio_net_attach(device_t dev)
 	sc->sc_vq[TX_VQ].vq_done = vioif_tx_vq_done; /* tx interrupt*/
 
 	virtio_start_vq_intr(vsc, &sc->sc_vq[RX_VQ]);
-	virtio_stop_vq_intr(vscc, &sc->sc_vq[TX_VQ]);
+	virtio_stop_vq_intr(vsc, &sc->sc_vq[TX_VQ]);
 
 
 	/* Virtqueue allocation for the ctrl queue */
 	if ((features & VIRTIO_NET_F_CTRL_VQ)
 		&& (features & VIRTIO_NET_F_CTRL_RX)){ /* rx & ctrl queues */
 		error = virtio_alloc_vq(vsc, &sc->sc_vq[CTRL_VQ], 2,
-			    NBPG, 1, "control vq");
+			    VIRTIO_PAGE_SIZE, 1, "control vq");
 
 		if (error != 0){
 			kprintf("Virtqueue allocation for control failed\n");
@@ -441,40 +504,57 @@ virtio_net_attach(device_t dev)
 		vsc->sc_nvqs = 3;
 		sc->sc_vq[CTRL_VQ].vq_done = vioif_ctrl_vq_done;
 
-		cv_init(&sc->sc_ctrl_wait, "ctrl_vq");
-		mutex_init(&sc->sc_ctrl_wait_lock, MUTEX_DEFAULT, IPL_NET);
+		//cv_init(&sc->sc_ctrl_wait, "ctrl_vq");
+		spin_init(&sc->sc_ctrl_wait_lock);
+
 		sc->sc_ctrl_inuse = FREE;
 
 		virtio_start_vq_intr(vsc, &sc->sc_vq[CTRL_VQ]);
 	}
 
-	sc->sc_rx_softint = softint_establish(SOFTINT_NET|SOFTINT_MPSAFE,
-						      vioif_rx_softint, sc);
-	if (sc->sc_rx_softint == NULL) {
-		aprint_error_dev(self, "cannot establish softint\n");
+
+	/* Software interrupt <-> we create a kernel thread instead
+	 * Use of lwkt_create to create the rx kernel thread */
+
+	/* Initialize the vioif lock -> really need a lock ? */
+	lockinit(&sc->sc_lock, "vioif lock", 0, 0);
+
+	/* This creates a thread to deal with rx requests.*/
+	lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
+	error = lwkt_create(vioif_rx_thread, sc->dev, &sc->sc_td, NULL,
+			0, 0, "vioif_msg");
+	if (error){
+		kprintf("Creatio, of vioif_rx_thread failed\n");
 		goto err;
 	}
+
+	while (sc->sc_run == 0)
+		lksleep(sc->sc_td, &sc->sc_lock, 0, "vioifc", 0 );
+	lockmgr(&sc->sc_lock, LK_RELEASE);
+
 
 	/* Memory allocation for the control queue (for virtio_softc) */
 	if (vioif_alloc_mems(sc) < 0)
 		goto err;
 
 	if (vsc->sc_nvqs == 3)
-		config_interrupts(self, vioif_deferred_init);
+		config_interrupts(dev, vioif_deferred_init);
 
 	/* Interface for the device switch */
-	strlcpy(ifp->if_xname, device_xname(dev), IFNAMSIZ);
-	ifp->if_softc = sc;
+	strlcpy(ifp->if_xname, device_get_name(dev), IFNAMSIZ);
+	ifp->if_softc = vsc;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	ifp->if_start = vioif_start;
 	ifp->if_ioctl = vioif_ioctl;
 	ifp->if_init = vioif_init;
-	ifp->if_stop = vioif_stop;
+	//doesn't exist in the ifnet structure, independent function
+	//ifp->if_down = vioif_down;
 	ifp->if_capabilities = 0;
 	ifp->if_watchdog = vioif_watchdog;
 
-	if_attach(ifp);
-	ether_ifattach(ifp, sc->sc_mac);
+	lwkt_serialize_enter(sc->sc_serializer);
+	if_attach(ifp, sc->sc_serializer);
+	ether_ifattach(ifp, sc->sc_mac, sc->sc_serializer);
 
 	kprintf("%s","CONFIG_DEVICE_STATUS_DRIVER");
 	virtio_set_status(vsc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK);
@@ -485,8 +565,8 @@ err:
 	kprintf("%s failure\n", __FUNCTION__);
 	if (vsc->sc_nvqs == 3) {
 		virtio_free_vq(vsc, &sc->sc_vq[CTRL_VQ]);
-		cv_destroy(&sc->sc_ctrl_wait);
-		mutex_destroy(&sc->sc_ctrl_wait_lock);
+		//cv_destroy(&sc->sc_ctrl_wait);
+		spin_uninit(&sc->sc_ctrl_wait_lock);
 		vsc->sc_nvqs = 2;
 	}
 	if (vsc->sc_nvqs == 2) {
@@ -505,7 +585,7 @@ static int
 virtio_net_detach(device_t dev)
 {
 	kprintf("%s\n",__FUNCTION__);
-	struct virtio_net_softc *sc = device_get_softc(dev);
+	struct vioif_softc *sc = device_get_softc(dev);
 	device_t pdev = device_get_parent(sc->dev);
 	struct virtio_softc *vsc = device_get_softc(pdev);
 
@@ -514,13 +594,14 @@ virtio_net_detach(device_t dev)
 	vioif_destroy_vq(sc, vsc, CTRL_VQ); /* destroy ctrl vq */
 
 	/* anything else ? */
+	lwkt_serialize_exit(sc->sc_serializer);
 
 	return 0;
 }
 
 /* Unload and free &sc->sc_vq[number] */
 static int
-vioif_destroy_vq(virtio_net_softc *sc, virtio_softc *vsc, int numq ){
+vioif_destroy_vq(vioif_softc *sc, virtio_softc *vsc, int numq ){
 
 	struct virtqueue *vq = &sc->sc_vq[numq];
 	int i;
@@ -561,7 +642,7 @@ static device_method_t virtio_net_methods[] = {
 static driver_t virtio_net_driver = {
 	"virtio_net",
 	virtio_net_methods,
-	sizeof(struct virtio_net_softc),
+	sizeof(struct vioif_softc),
 };
 
 static devclass_t virtio_net_devclass;
