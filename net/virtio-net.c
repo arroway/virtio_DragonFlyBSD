@@ -414,7 +414,7 @@ vioif_updown(struct vioif_softc *sc, bool isup)
 	if (!(vsc->sc_features & VIRTIO_NET_F_STATUS))
 		return ENODEV;
 
-	virtio_write_device_config_1(vsc,
+	bus_space_write_1(vsc->sc_iot, vsc->sc_ioh,
 				     VIRTIO_NET_CONFIG_STATUS,
 				     isup?VIRTIO_NET_S_LINK_UP:0);
 	return 0;
@@ -1515,22 +1515,22 @@ vioif_attach(device_t dev)
 			getmicrouptime(&tv);
 			ui = (tv.tv_sec ^ tv.tv_usec) & 0xffffff;
 			memcpy(sc->sc_mac+3, (uint8_t *)&ui, 3);
-			virtio_write_device_config_1(vsc,
+			bus_space_write_1(vsc->sc_iot, vsc->sc_ioh,
 						     VIRTIO_NET_CONFIG_MAC+0,
 						     sc->sc_mac[0]);
-			virtio_write_device_config_1(vsc,
+			bus_space_write_1(vsc->sc_iot, vsc->sc_ioh,
 						     VIRTIO_NET_CONFIG_MAC+1,
 						     sc->sc_mac[1]);
-			virtio_write_device_config_1(vsc,
+			bus_space_write_1(vsc->sc_iot, vsc->sc_ioh,
 						     VIRTIO_NET_CONFIG_MAC+2,
 						     sc->sc_mac[2]);
-			virtio_write_device_config_1(vsc,
+			bus_space_write_1(vsc->sc_iot, vsc->sc_ioh,
 						     VIRTIO_NET_CONFIG_MAC+3,
 						     sc->sc_mac[3]);
-			virtio_write_device_config_1(vsc,
+			bus_space_write_1(vsc->sc_iot, vsc->sc_ioh,
 						     VIRTIO_NET_CONFIG_MAC+4,
 						     sc->sc_mac[4]);
-			virtio_write_device_config_1(vsc,
+			bus_space_write_1(vsc->sc_iot, vsc->sc_ioh,
 						     VIRTIO_NET_CONFIG_MAC+5,
 						     sc->sc_mac[5]);
 		}
