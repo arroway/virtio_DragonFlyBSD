@@ -1,9 +1,4 @@
 /*
- * bug quand kldunload virtio-blk.ko si disuqe toujour monté
- * pb pour umount
- * */
-
- /*
  * Copyright (c) 2010 Minoura Makoto.
  * All rights reserved.
  *

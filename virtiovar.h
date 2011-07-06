@@ -76,7 +76,7 @@
 //#include "virtioreg.h"
 
 struct vq_entry {
-	TAILQ_ENTRY(vq_entry)	qe_list;	/* free list */ 
+	TAILQ_ENTRY(vq_entry)	qe_list;	/* free list */
 	uint16_t		qe_index;	/* index in vq_desc array */
 
 	/* followings are used only when it is the `head' entry */ 
@@ -112,7 +112,7 @@ struct virtqueue {
 
 	/* free entry management */
 	struct vq_entry		*vq_entries;
-	TAILQ_HEAD(, vq_entry)	vq_freelist;
+	TAILQ_HEAD(,vq_entry)	vq_freelist;
 	struct spinlock		vq_freelist_lock;
 
 	/* enqueue/dequeue status */
@@ -211,10 +211,12 @@ int	virtio_enqueue_reserve(struct virtio_softc*, struct virtqueue*, int, int);
 int	virtio_enqueue_commit(struct virtio_softc*, struct virtqueue*, int, bool);
 
 int	virtio_dequeue_commit(struct virtio_softc*, struct virtqueue*, int);
+int virtio_enqueue_abort(struct virtio_softc*, struct virtqueue*, int);
 int	virtio_dequeue(struct virtio_softc*, struct virtqueue*, int *, int *);
 
 int	virtio_vq_intr(struct virtio_softc *);
 void	virtio_stop_vq_intr(struct virtio_softc *, struct virtqueue *);
 void	virtio_start_vq_intr(struct virtio_softc *, struct virtqueue *);
-
+void virtio_reinit_start(struct virtio_softc *);
+void virtio_reinit_end(struct virtio_softc *);
 #endif /* _VIRTIOVAR_H_ */

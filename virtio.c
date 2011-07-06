@@ -130,6 +130,64 @@ vq_sync_aring(struct virtio_softc *sc, struct virtqueue *vq, int ops)
 	bus_dmamap_sync(sc->requests_dmat, vq->vq_dmamap, ops);
 }
 
+
+void
+virtio_reinit_start(struct virtio_softc *sc)
+{
+	int i;
+
+	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_ACK);
+	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER);
+	for (i = 0; i < sc->sc_nvqs; i++) {
+		int n;
+		struct virtqueue *vq = &sc->sc_vqs[i];
+		bus_space_write_2(sc->sc_iot, sc->sc_ioh,
+				  VIRTIO_CONFIG_QUEUE_SELECT,
+				  vq->vq_index);
+		n = bus_space_read_2(sc->sc_iot, sc->sc_ioh,
+				     VIRTIO_CONFIG_QUEUE_SIZE);
+		if (n == 0)	/* vq disappeared */
+			continue;
+		if (n != vq->vq_num) {
+			debug("virtqueue size changed, vq index %d\n",
+			      vq->vq_index);
+		}
+		virtio_init_vq(sc, vq);
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh,
+				  VIRTIO_CONFIG_QUEUE_ADDRESS,
+				  (vq->bus_addr
+				   / VIRTIO_PAGE_SIZE));
+	}
+}
+
+void
+virtio_reinit_end(struct virtio_softc *sc)
+{
+	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK);
+}
+
+
+
+
+/*
+ * Start/stop vq interrupt.  No guarantee.
+ */
+void
+virtio_stop_vq_intr(struct virtio_softc *sc, struct virtqueue *vq)
+{
+	vq->vq_avail->flags |= VRING_AVAIL_F_NO_INTERRUPT;
+	vq_sync_aring(sc, vq, BUS_DMASYNC_PREWRITE);
+	vq->vq_queued++;
+}
+
+void
+virtio_start_vq_intr(struct virtio_softc *sc, struct virtqueue *vq)
+{
+	vq->vq_avail->flags &= ~VRING_AVAIL_F_NO_INTERRUPT;
+	vq_sync_aring(sc, vq, BUS_DMASYNC_PREWRITE);
+	vq->vq_queued++;
+}
+
 /*
  * Initialize vq structure.
  */
@@ -643,6 +701,34 @@ virtio_vq_intr(struct virtio_softc *sc)
 
 	return r;
 }
+
+
+/*
+ * enqueue_abort: rollback.
+ */
+int
+virtio_enqueue_abort(struct virtio_softc *sc, struct virtqueue *vq, int slot)
+{
+	struct vq_entry *qe = &vq->vq_entries[slot];
+	struct vring_desc *vd;
+	int s;
+
+	if (qe->qe_next < 0) {
+		vq_free_entry(vq, qe);
+		return 0;
+	}
+
+	s = slot;
+	vd = &vq->vq_desc[0];
+	while (vd[s].flags & VRING_DESC_F_NEXT) {
+		s = vd[s].next;
+		vq_free_entry(vq, qe);
+		qe = &vq->vq_entries[s];
+	}
+	vq_free_entry(vq, qe);
+	return 0;
+}
+
 
 /*
  * Dequeue a request: dequeue a request from uring; dmamap_sync for uring is 

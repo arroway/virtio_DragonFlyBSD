@@ -895,7 +895,7 @@ vioif_rx_deq(struct vioif_softc *sc)
 
 /* rx interrupt; call _dequeue above and schedule a softint */
 static int
-vioif_rx_vq_done(struct virtqueue *vq)
+vioif_rx_vq_done()
 {
 	struct virtio_softc *vsc = vq->vq_owner;
 	struct vioif_softc *sc = device_private(vsc->sc_child);

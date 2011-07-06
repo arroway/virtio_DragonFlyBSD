@@ -127,6 +127,7 @@
  * These can chain together via "next". 
  */ 
 struct vring_desc {
+
 	u_int64_t	addr;	/* Address (guest-physical). */
 	u_int32_t	len;	/* Length. */
 	u_int16_t	flags;	/* The flags as indicated above. */
