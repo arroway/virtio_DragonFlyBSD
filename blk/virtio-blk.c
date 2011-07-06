@@ -508,7 +508,7 @@ virtio_blk_probe(device_t dev)
 	if (pci_read_config(pdev, PCIR_SUBDEV_0, 2) == PCI_PRODUCT_VIRTIO_BLOCK) {
 		debug("parent:%p is block\n", pdev);
 	} else {
-		debug("parent:%p is not block\n");
+		debug("parent:%p is not block\n", pdev);
 		return 1;
 	}
 
