@@ -8,6 +8,6 @@ See on gitorious: https://gitorious.org/virtio-drivers/virtio-drivers/trees/mast
 
 
 blk/: the block device driver
-net/: the net device driver - to be completed
+net/: the net device driver - BEING TESTED, DOESN'T WORK YET
 balloon/: the memory ballooning device driver - to be created
 

@@ -1446,7 +1446,7 @@ vioif_probe(device_t dev)
 	
 	device_t pdev = device_get_parent(dev);
 
-	if(pci_read_config(dev,PCIR_SUBDEV_0,2) == PCI_PRODUCT_VIRTIO_NETWORK) {
+	if(pci_read_config(pdev,PCIR_SUBDEV_0,2) == PCI_PRODUCT_VIRTIO_NETWORK) {
 		debug("parent:%p is net\n", pdev);
 	} else {
 		debug("parent:%p is not net\n", pdev);
