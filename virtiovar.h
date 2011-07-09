@@ -77,48 +77,48 @@
 
 struct vq_entry {
 	TAILQ_ENTRY(vq_entry)	qe_list;	/* free list */
-	uint16_t		qe_index;	/* index in vq_desc array */
+	uint16_t			qe_index;	/* index in vq_desc array */
 
 	/* followings are used only when it is the `head' entry */ 
-	int16_t			qe_next;	/* next enq slot */ 
-	bool			qe_indirect;	/* 1 if using indirect */ 
+	int16_t				qe_next;	/* next enq slot */
+	bool				qe_indirect;	/* 1 if using indirect */
 	struct vring_desc	*qe_desc_base;
 };
 
 struct virtqueue {
 	struct virtio_softc	*vq_owner; 
-	u_int32_t		vq_num;	/* queue size (# of entries) */ 
-	int32_t			vq_index;	/* queue number (0, 1, ...) */
+	u_int32_t			vq_num;	/* queue size (# of entries) */
+	int32_t				vq_index;	/* queue number (0, 1, ...) */
 
 	/* vring pointers (KVA) */
 	struct vring_desc       *vq_desc;
 	struct vring_avail      *vq_avail;
 	struct vring_used       *vq_used;
-	void			*vq_indirect;
+	void					*vq_indirect;
 
 	/* virtqueue allocation info */
-	void			*vq_vaddr;
-	int32_t			 vq_availoffset;
-	int32_t			vq_usedoffset;
-	int32_t			vq_indirectoffset;
+	void				*vq_vaddr;
+	int32_t				vq_availoffset;
+	int32_t				vq_usedoffset;
+	int32_t				vq_indirectoffset;
 	bus_dma_segment_t	vq_segs[1];
-	u_int32_t		vq_bytesize;
+	u_int32_t			vq_bytesize;
 	bus_dma_tag_t		vq_dmat;
 	bus_dmamap_t		vq_dmamap;
-	bus_addr_t		bus_addr;
+	bus_addr_t			bus_addr;
 
 	int32_t			vq_maxsegsize;
 	int32_t			vq_maxnsegs;
 
 	/* free entry management */
-	struct vq_entry		*vq_entries;
+	struct vq_entry			*vq_entries;
 	TAILQ_HEAD(,vq_entry)	vq_freelist;
-	struct spinlock		vq_freelist_lock;
+	struct spinlock			vq_freelist_lock;
 
 	/* enqueue/dequeue status */
-	u_int16_t		vq_avail_idx;
-	u_int16_t		vq_used_idx;
-	int32_t			vq_queued;
+	u_int16_t			vq_avail_idx;
+	u_int16_t			vq_used_idx;
+	int32_t				vq_queued;
 	struct spinlock		vq_aring_lock;
 	struct spinlock		vq_uring_lock;
 
@@ -131,19 +131,19 @@ struct virtio_softc {
 	int32_t			rid_memory;
 	int32_t			rid_irq;
 
-	int32_t			regs_rid;	/* resource id*/
+	int32_t				regs_rid;	/* resource id*/
 	struct resource		*res_memory;	/* Resource for mem range. */
 	struct resource		*res_irq;	/* Resource for irq range. */
 	struct resource		*io; 
 
 	bus_dma_tag_t		virtio_dmat;	/*Master tag*/
 
-	int32_t			sc_config_offset;
+	int32_t				sc_config_offset;
 
 	bus_space_tag_t		sc_iot;
 	bus_space_handle_t	sc_ioh;
 
-	int			sc_nvqs;	/* set by child */
+	int					sc_nvqs;	/* set by child */
 	struct virtqueue	*sc_vqs;
 
 	bus_dma_tag_t		requests_dmat;
@@ -153,7 +153,7 @@ struct virtio_softc {
 	vm_paddr_t		phys_next;	/* next page from mem range */
 	uint32_t		sc_features;
 	bool			sc_indirect;
-	int			sc_childdevid;
+	int				sc_childdevid;
 	device_t		sc_child;	/* set by child */
 	void			*virtio_intr;
 

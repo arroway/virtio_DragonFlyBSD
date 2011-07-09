@@ -182,106 +182,106 @@ struct virtio_net_hdr {
 
 struct vioif_softc {
 
-	device_t dev;
-	struct virtio_softc *sc_virtio;
-	struct virtqueue sc_vq[3]; /* 3 virtqueues : rx, tx & ctrl */
+	device_t 		dev;
+	struct 			virtio_softc *sc_virtio;
+	struct			virtqueue sc_vq[3]; /* 3 virtqueues : rx, tx & ctrl */
 
-	int sc_readonly;
-	uint32_t sc_features;
-	int maxxfersize;
+	int 			sc_readonly;
+	uint32_t 		sc_features;
+	int 			maxxfersize;
 
-	short sc_ifflags;
-	uint8_t sc_mac[ETHER_ADDR_LEN];
-	struct arpcom sc_arpcom;
+	short 			sc_ifflags;
+	uint8_t 		sc_mac[ETHER_ADDR_LEN];
+	struct arpcom 	sc_arpcom;
 
 
 	/* Headers preceeding packets placed in the transmitting
 	 * or receiving queue */
-	bus_dma_tag_t sc_hdr_dmat;
-	bus_dmamap_t *sc_hdr_dmamap;
-	bus_dma_segment_t sc_hdr_segs[1];
-	struct virtio_net_hdr *sc_hdrs;
+	bus_dma_tag_t 			sc_hdr_dmat;
+	bus_dmamap_t 			sc_hdr_dmamap;
+	bus_dma_segment_t 		sc_hdr_segs[1];
+	struct virtio_net_hdr 	*sc_hdrs;
 #define sc_rx_hdrs	sc_hdrs
-	struct virtio_net_hdr *sc_tx_hdrs;
+	struct virtio_net_hdr 	*sc_tx_hdrs;
 
 	/* Control virtqueue commands */
-	struct virtio_net_ctrl_cmd *sc_ctrl_cmd;
-	bus_dmamap_t *sc_ctrl_cmd_dmamap;
-	int *sc_ctrl_cmd_nseg;
-	bus_dma_segment_t *sc_ctrl_cmd_segment;
+	struct virtio_net_ctrl_cmd 	*sc_ctrl_cmd;
+	bus_dmamap_t 				sc_ctrl_cmd_dmamap;
+	int						   	sc_ctrl_cmd_nseg;
+	bus_dma_segment_t 			*sc_ctrl_cmd_segment;
 
-	struct virtio_net_ctrl_status *sc_ctrl_status;
-	bus_dmamap_t *sc_ctrl_status_dmamap;
-	int *sc_ctrl_status_nseg;
-	bus_dma_segment_t *sc_ctrl_status_segment;
+	struct virtio_net_ctrl_status	*sc_ctrl_status;
+	bus_dmamap_t 					sc_ctrl_status_dmamap;
+	int 							sc_ctrl_status_nseg;
+	bus_dma_segment_t 				*sc_ctrl_status_segment;
 
-	struct virtio_net_ctrl_rx *sc_ctrl_rx;
-	bus_dmamap_t *sc_ctrl_rx_dmamap;
-	int *sc_ctrl_rx_nseg;
-	bus_dma_segment_t *sc_ctrl_rx_segment;
+	struct virtio_net_ctrl_rx 	*sc_ctrl_rx;
+	bus_dmamap_t 				sc_ctrl_rx_dmamap;
+	int 						sc_ctrl_rx_nseg;
+	bus_dma_segment_t 			*sc_ctrl_rx_segment;
 
 
 	/* MAC address filtering */
 	/* Unicast */
-	struct virtio_net_ctrl_mac_tbl *sc_ctrl_mac_tbl_uc;
-	bus_dmamap_t *sc_ctrl_tbl_uc_dmamap;
-	int *sc_ctrl_uc_nseg;
-	bus_dma_segment_t *sc_ctrl_uc_segment;
+	struct virtio_net_ctrl_mac_tbl	*sc_ctrl_mac_tbl_uc;
+	bus_dmamap_t 					sc_ctrl_tbl_uc_dmamap;
+	int 							sc_ctrl_uc_nseg;
+	bus_dma_segment_t 				*sc_ctrl_uc_segment;
 
 	/* Multicast */
-	struct virtio_net_ctrl_mac_tbl *sc_ctrl_mac_tbl_mc;
-	bus_dmamap_t *sc_ctrl_tbl_mc_dmamap;
-	int *sc_ctrl_mc_nseg;
-	bus_dma_segment_t *sc_ctrl_mc_segment;
+	struct virtio_net_ctrl_mac_tbl 	*sc_ctrl_mac_tbl_mc;
+	bus_dmamap_t 					sc_ctrl_tbl_mc_dmamap;
+	int 							sc_ctrl_mc_nseg;
+	bus_dma_segment_t 				*sc_ctrl_mc_segment;
 
-	int *sc_ctrl_nseg_temp; /* temp */
+	int sc_ctrl_nseg_temp; /* temp */
 	bus_dma_segment_t *sc_ctrl_segment_temp; /* temp */
 
 
 	/* Reception header */
 	bus_dmamap_t		*sc_arrays;
 #define sc_rxhdr_dmamaps sc_arrays
-	int *sc_rxhdr_nseg;
-	int *sc_nseg_temp_rx; /* temp */
-	bus_dma_segment_t *sc_rxhdr_segment;
-	bus_dma_segment_t *sc_segment_temp_rx; /* temp */
+	int 				*sc_rxhdr_nseg;
+	int 				*sc_nseg_temp_rx; /* temp */
+	bus_dma_segment_t 	*sc_rxhdr_segment;
+	bus_dma_segment_t 	*sc_segment_temp_rx; /* temp */
 
 	/* Reception */
 	bus_dmamap_t		*sc_rx_dmamaps;
-	int *sc_rx_nseg;
-	bus_dma_segment_t *sc_rx_segment;
-	struct mbuf		**sc_rx_mbufs;
+	int 				*sc_rx_nseg;
+	bus_dma_segment_t	*sc_rx_segment;
+	struct mbuf			**sc_rx_mbufs;
 
 
 
 	/* Transmission header */
-	bus_dmamap_t *sc_txhdr_dmamaps;
-	int *sc_txhdr_nseg;
-	int *sc_nseg_temp_tx; /* temp */
-	bus_dma_segment_t *sc_txhdr_segment;
-	bus_dma_segment_t *sc_segment_temp_tx; /* temp */
+	bus_dmamap_t 		*sc_txhdr_dmamaps;
+	int 				*sc_txhdr_nseg;
+	int 				*sc_nseg_temp_tx; /* temp */
+	bus_dma_segment_t 	*sc_txhdr_segment;
+	bus_dma_segment_t 	*sc_segment_temp_tx; /* temp */
 
 	/* Transmission */
-	bus_dmamap_t *sc_tx_dmamaps;
-	int *sc_tx_nseg;
-	bus_dma_segment_t *sc_tx_segment;
-	struct mbuf	**sc_tx_mbufs;
+	bus_dmamap_t 		*sc_tx_dmamaps;
+	int 				*sc_tx_nseg;
+	bus_dma_segment_t 	*sc_tx_segment;
+	struct mbuf			**sc_tx_mbufs;
 
 	enum  {
-		FREE, INUSE, DONE
+		ISFREE, INUSE, DONE
 	} sc_ctrl_inuse;
 
-	struct cv *sc_ctrl_wait;
-	struct lock *sc_ctrl_wait_lock;
-	lwkt_serialize_t sc_serializer;
+	struct cv 				sc_ctrl_wait;
+	struct lock 			sc_ctrl_wait_lock;
+	struct lwkt_serialize 	sc_serializer;
 
 	/* LWKT messages*/
-	struct lwkt_msg	sc_lmsg;
-	struct lwkt_port sc_port;
-	struct lock sc_lock;
-	struct thread *sc_td;
-	int sc_run;
-	lwkt_msg sc_msg;
+	struct lwkt_msg		sc_lmsg;
+	struct lwkt_port 	sc_port;
+	struct lock 		sc_lock;
+	struct thread 		*sc_td;
+	int 				sc_run;
+	lwkt_msg 			sc_msg;
 
 };
 

@@ -910,7 +910,7 @@ vioif_rx_vq_done()
 
 /* softint: enqueue recieve requests for new incoming packets */
 static void
-vioif_rx_softint(void *arg)
+	(void *arg)
 {
 	struct vioif_softc *sc = arg;
 

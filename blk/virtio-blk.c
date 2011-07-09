@@ -99,34 +99,34 @@ struct virtio_blk_bio {
  */
 struct virtio_blk_req {
 	struct virtio_blk_req_hdr	vr_hdr;
-	uint8_t			vr_status;
-	struct buf		*vr_bp;
+	uint8_t						vr_status;
+	struct buf					*vr_bp;
 
-	bus_dmamap_t		cmd_dmap;
-	bus_addr_t		ds_addr;	/* DMA address */
-	bus_size_t		ds_len;	/* length of transfer */
+	bus_dmamap_t			cmd_dmap;
+	bus_addr_t				ds_addr;	/* DMA address */
+	bus_size_t				ds_len;	/* length of transfer */
 
-	bus_dmamap_t		payload_dmap;
-	bus_dma_segment_t	*segs;
-	int nseg;
+	bus_dmamap_t			payload_dmap;
+	bus_dma_segment_t		*segs;
+	int 					nseg;
 };
 
 struct virtio_blk_softc {
-	device_t		dev;
-	struct virtio_softc	*sc_virtio;
-	struct virtqueue	sc_vq[1]; 
-	int			sc_readonly; 
-	int			maxxfersize;
+	device_t				dev;
+	struct virtio_softc		*sc_virtio;
+	struct virtqueue		sc_vq[1];
+	int						sc_readonly;
+	int						maxxfersize;
 
 	/*Block Device Specific*/
-	cdev_t			cdev;
-	struct devstat		stats;
-	struct disk		disk;
+	cdev_t					cdev;
+	struct devstat			stats;
+	struct disk				disk;
 
-	struct virtio_blk_req	*sc_reqs;
+	struct virtio_blk_req			*sc_reqs;
 	/*throttle outstanding ios*/
 	TAILQ_HEAD(, virtio_blk_bio)	vbb_queue;	
-	struct spinlock		vbb_queue_lock;
+	struct spinlock					vbb_queue_lock;
 };
 
 /*
