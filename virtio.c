@@ -209,7 +209,6 @@ virtio_init_vq(struct virtio_softc *sc, struct virtqueue *vq)
 			for (j = 0; j < vq->vq_maxnsegs-1; j++)
 				vd[j].next = j + 1;
 		}
-		MODULE_VERSION(virtiobus, 0);
 	}
 
 	/* free slot management */

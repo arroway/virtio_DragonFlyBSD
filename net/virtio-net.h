@@ -279,8 +279,10 @@ struct vioif_softc {
 	struct lwkt_msg		sc_lmsg;
 	struct lwkt_port 	sc_port;
 	struct lock 		sc_lock;
-	struct thread 		*sc_td;
+	struct thread 		*sc_rx_td;
+	struct thread		*sc_promisc_td;
 	int 				sc_run;
+	int 				sc_init;
 	lwkt_msg 			sc_msg;
 
 };

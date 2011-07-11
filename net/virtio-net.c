@@ -116,13 +116,20 @@ static int	vioif_rx_filter(struct vioif_softc *);
 static int	vioif_ctrl_vq_done(struct virtqueue *);
 static int  vioif_destroy_vq(struct vioif_softc *, struct virtio_softc *, int);
 static void vioif_deferred_init(device_t );
+static void vioif_set_promisc_init(void *);
 
-/* memory allocation */
+/* memory allocation and callback functions */
 static int vioif_alloc_mems(struct vioif_softc *);
 static void dmamap_create(struct vioif_softc *, bus_dmamap_t, int, char*);
 //static void dmamap_load(struct vioif_softc *, bus_dmamap_t, void *, int, int, int, int, char*);
 static void dmamap_destroy(bus_dma_tag_t, bus_dmamap_t);
 static void dmamap_error(struct vioif_softc *, int, int, char*);
+static void rxhdr_load_callback(void *, bus_dma_segment_t *, int, int);
+static void txhdr_load_callback(void *, bus_dma_segment_t *, int, int);
+static void cmd_load_callback(void *, bus_dma_segment_t *, int, int);
+static void rx_load_mbuf_callback(void *, bus_dma_segment_t *, int, bus_size_t, int);
+static void tx_load_mbuf_callback(void *, bus_dma_segment_t *, int, bus_size_t, int);
+
 
 /* Callback function for rx header */
 static void
@@ -1012,7 +1019,7 @@ vioif_rx_thread(void *arg)
 
 	lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
 	sc->sc_run = 1;
-	wakeup(sc->sc_td);
+	wakeup(sc->sc_rx_td);
 	lockmgr(&sc->sc_lock, LK_RELEASE);
 
 	get_mplock();
@@ -1041,10 +1048,10 @@ vioif_rx_drain(struct vioif_softc *sc)
 	}
 }
 
+
 /*
  * Transmission implementation
  */
-
 
 static int
 vioif_tx_vq_done(struct virtqueue *vq)
@@ -1122,39 +1129,28 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	debug("Enter vioif_ctrl_rx\n");
 
-	unsigned long int i;
-	for (i = 0; i < 4000000000; i++ ){
-		__asm__("nop");
-	}
-
-
-
 	if (vsc->sc_nvqs < 3)
 		return ENOTSUP;
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 
 	debug("lockmgr LK_EXCLUSIVE\n");
-	for (i = 0; i < 4000000000; i++ ){
-		__asm__("nop");
-	}
-
+	debug("sc->sc_trl_inuse: %X08\n", sc->sc_ctrl_inuse);
 
 	while(sc->sc_ctrl_inuse != ISFREE){
 
 		debug("&sc_ctrl_wait: %08x\n", (unsigned int)&sc->sc_ctrl_wait );
 		debug("&sc_ctrl_wait_lock: %08x\n", (unsigned int)&sc->sc_ctrl_wait_lock );
 
-		for (i = 0; i < 4000000000; i++ ){
-			__asm__("nop");
-		}
-
-
 		cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
 		debug("cv_wait");
 	}
 
+
 	sc->sc_ctrl_inuse = INUSE;
+
+	debug("sc->sc_trl_inuse: %X08\n", sc->sc_ctrl_inuse);
+
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 
 	debug("lockmgr LK_RELEASE\n");
@@ -1180,7 +1176,7 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 		debug("%s: control vq busy!?\n", device_get_name(sc->dev));
 
 	//*(sc->sc_tx_dmamaps).dmat->segs, 0,
-	virtio_enqueue(vsc, vq, slot,
+	/*(vsc, vq, slot,
 			sc->sc_ctrl_cmd_segment,
 			sc->sc_ctrl_cmd_nseg,
 			sc->sc_ctrl_cmd_dmamap,
@@ -1198,7 +1194,7 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 			sc->sc_ctrl_status_dmamap,
 			false);
 
-	virtio_enqueue_commit(vsc, vq, slot, true);
+	virtio_enqueue_commit(vsc, vq, slot, true);*/
 
 	/* wait for done */
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
@@ -1229,62 +1225,71 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 /*
  * Set on/off promiscuous mode for the virtio network device (the kernel/CPU
- * will receive all entwork traffic)
+ * will receive all network traffic)
  */
-static int
-vioif_set_promisc(struct vioif_softc *sc, bool onoff)
-{
-	int r;
 
-
-
-	debug("Enter vioif_set_promisc\n");
-
-	unsigned long int i;
-	for (i = 0; i < 4000000000; i++ ){
-		__asm__("nop");
-	}
-	r = vioif_ctrl_rx(sc, VIRTIO_NET_CTRL_RX_PROMISC, onoff);
-
-	for (i = 0; i < 4000000000; i++ ){
-		__asm__("nop");
-	}
-
-	return r;
-}
-
-
-/* We need interrupts to make promiscuous mode off */
+/* We need interrupt to make promiscuous mode off */
 static void
 vioif_deferred_init(device_t dev)
 {
 	struct vioif_softc *sc = device_get_softc(dev);
-	struct ifnet *ifp = &sc->sc_arpcom.ac_if;
-	int r;
 
 	debug("Enter vioif_deferred_init\n");
 
-	unsigned long int i;
-	for (i = 0; i < 4000000000; i++ ){
-		__asm__("nop");
-	}
+	lwkt_initmsg(&sc->sc_lmsg, &sc->sc_port, 0);
+	lwkt_sendmsg(&sc->sc_port, &sc->sc_lmsg);
 
-
-	r =  vioif_set_promisc(sc, false);
-
-	for (i = 0; i < 4000000000; i++ ){
-		__asm__("nop");
-	}
-
+	/*r =  vioif_set_promisc(sc, false);
 
 	if (r != 0)
 		debug("resetting promisc mode failed, "
 				 "error code %d\n", r);
 	else
-		ifp->if_flags &= ~IFF_PROMISC;
+		ifp->if_flags &= ~IFF_PROMISC;*/
 }
 
+static void
+vioif_set_promisc_init(void *arg)
+{
+	device_t dev = arg;
+	struct vioif_softc *sc = device_get_softc(dev);
+	struct ifnet *ifp = &sc->sc_arpcom.ac_if;
+	int r;
 
+	debug("Enter vioif_set_promisc\n");
+	lwkt_initport_thread(&sc->sc_port, curthread);
+
+	lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
+	sc->sc_init = 1;
+	wakeup(sc->sc_promisc_td);
+	lockmgr(&sc->sc_lock, LK_RELEASE);
+
+	get_mplock();
+
+	r = 1;
+	while(sc->sc_init && r){
+		sc->sc_msg = *(lwkt_msg_t)lwkt_waitport(&sc->sc_port, 0); /* ? */
+		r = vioif_ctrl_rx(sc, VIRTIO_NET_CTRL_RX_PROMISC, false);
+
+		if (r != 0)
+			debug("resetting promisc mode failed, "
+					 "error code %d\n", r);
+		else
+			ifp->if_flags &= ~IFF_PROMISC;
+
+		lwkt_replymsg(&sc->sc_lmsg, 0);
+	}
+}
+
+static int
+vioif_set_promisc(struct vioif_softc *sc, bool onoff)
+{
+	int r;
+
+	r = vioif_ctrl_rx(sc, VIRTIO_NET_CTRL_RX_PROMISC, onoff);
+
+	return r;
+}
 
 /*
  * All multicast mode ?
@@ -1681,6 +1686,7 @@ vioif_attach(device_t dev)
 		}
 
 		vsc->sc_nvqs = 3;
+		sc->sc_init = 0;
 		sc->sc_vq[CTRL_VQ].vq_done = vioif_ctrl_vq_done;
 
 		cv_init(&sc->sc_ctrl_wait, "ctrl_vq");
@@ -1703,7 +1709,7 @@ vioif_attach(device_t dev)
 
 	error = lwkt_create(vioif_rx_thread,
 			sc->dev,
-			&sc->sc_td,
+			&sc->sc_rx_td,
 			NULL, 0, 0,
 			"vioif_msg");
 
@@ -1713,7 +1719,7 @@ vioif_attach(device_t dev)
 	}
 
 	while (sc->sc_run == 0)
-		lksleep(sc->sc_td, &sc->sc_lock, 0, "vioifc", 0 );
+		lksleep(sc->sc_rx_td, &sc->sc_lock, 0, "vioif", 0 );
 
 	lockmgr(&sc->sc_lock, LK_RELEASE);
 
@@ -1726,12 +1732,27 @@ vioif_attach(device_t dev)
 
 	debug("sortie du if \n");
 
+	/* Set promiscuous mode off at starting. Needs interrupt */
+	lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
+
+	error =  lwkt_create(vioif_set_promisc_init,
+			sc->dev,
+			&sc->sc_promisc_td,
+			NULL, 0, 0,
+			"vioif_set_promisc");
+
+	if (error){
+		debug("Creation of vioif_set_promisc_init thread failed\n");
+		goto err;
+	}
 
 	if (vsc->sc_nvqs == 3){
 		debug("We call vioif_deferred_init\n");
-		vioif_deferred_init(dev); //need interrupt
+		while (sc->sc_init == 0)
+			lksleep(sc->sc_promisc_td, &sc->sc_lock, 0, "vioif", 0 );
+		vioif_deferred_init(dev);
+		lockmgr(&sc->sc_lock, LK_RELEASE);
 	}
-		//config_interrupts(dev, vioif_deferred_init);
 
 	debug("after vioif_deferred_init\n");
 
@@ -1752,6 +1773,8 @@ vioif_attach(device_t dev)
 
 	kprintf("%s","CONFIG_DEVICE_STATUS_DRIVER");
 	virtio_set_status(vsc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK);
+
+
 
     return 0;
 
