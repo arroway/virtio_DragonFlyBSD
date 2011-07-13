@@ -471,51 +471,81 @@ virtio_enqueue_commit(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 {
 	struct vq_entry *qe1;
 
+	debug("Enter virtio_enqueue_commit\n");
+
 	if (slot < 0) {
 		spin_lock(&vq->vq_aring_lock);
+		debug("spin_lock\n");
 		goto notify;
 	}
+	debug("before vq_sync_desc");
 	vq_sync_descs(sc, vq, BUS_DMASYNC_PREWRITE);
+	debug("vq_sync_desc");
 
 	qe1 = &vq->vq_entries[slot];
-	if (qe1->qe_indirect)
+	if (qe1->qe_indirect){
+		debug("inside if vq_entries");
 		vq_sync_indirect(sc, vq, slot, BUS_DMASYNC_PREWRITE);
+		debug("after vq_sync_indirect");
+	}
 
 	spin_lock(&vq->vq_aring_lock);
+	debug("spin_lock");
 	vq->vq_avail->ring[(vq->vq_avail_idx++) % vq->vq_num] = slot;
+	debug("affectation");
 
 notify:
+	debug("notify?\n");
 	if (notifynow) {
+		debug("in notify\n");
 		vq_sync_aring(sc, vq, BUS_DMASYNC_PREWRITE);
+		debug("after vq_sync_aring\n");
 		vq_sync_uring(sc, vq, BUS_DMASYNC_PREREAD);
+		debug("after vq_sync_uring");
 
 
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_avail->idx, 2,
-				  BUS_SPACE_BARRIER_WRITE);
+				BUS_SPACE_BARRIER_WRITE);
+		debug("bus_space_barrier\n");
 
 		vq->vq_avail->idx = vq->vq_avail_idx;
+		debug("after affectation\n");
 
 		vq_sync_aring(sc, vq, BUS_DMASYNC_PREWRITE);    
+		debug("after vq_sync_aring\n");
 
 
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_queued, 4,
 				  BUS_SPACE_BARRIER_WRITE);
+		debug("bus_space_barrier write\n");
+
 
 		vq->vq_queued++;
+		debug("incr vq_queued\n");
 
 		vq_sync_uring(sc, vq, BUS_DMASYNC_POSTREAD);
+		debug("after vq_sync_aring postread\n");
+
 
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_used->flags, 2,
 				  BUS_SPACE_BARRIER_READ);
+		debug("after bus_space_barrier\n");
+
 
 		if (!(vq->vq_used->flags & VRING_USED_F_NO_NOTIFY)) {
+
+			debug("in if\n");
+
 			bus_space_write_2(sc->sc_iot, sc->sc_ioh,
 					  VIRTIO_CONFIG_QUEUE_NOTIFY,
-					  vq->vq_index); 
+					  vq->vq_index);
+
+			debug("after bus_space_write\n");
+
 		}
 	}
 	spin_unlock(&vq->vq_aring_lock);
-
+	debug("end of virito_enqueue_commit\n");
 	return 0;
 }
 
@@ -637,18 +667,30 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	int i;
 	int s = qe1->qe_next;
 
+	debug("enter virtio_enqueue");
+
 	KKASSERT(s >= 0);
+	debug("after KKASSERT");
+
 	for (i = 0; i < nseg; i++) {
+		debug("in for loop");
+
+		debug("i = %d, addr :%08X", i, segs[i].ds_addr );
+		debug("i = %d, len :%08X", i, segs[i].ds_len );
+
 		vd[s].addr = segs[i].ds_addr;
 		vd[s].len = segs[i].ds_len;
+
 		if (!write)
 			vd[s].flags |= VRING_DESC_F_WRITE;
 		debug("s:%d addr:0x%llu len:%lu\n", s, 
 		      (unsigned long long)vd[s].addr,(unsigned long) vd[s].len);
 		s = vd[s].next;
+		debug("i = %d, next :%08X", i, vd[s].next );
 	}
 
 	qe1->qe_next = s;
+	debug("out of virtio_enqueue");
 
 	return 0;
 }
