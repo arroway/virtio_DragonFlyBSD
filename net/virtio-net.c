@@ -1175,14 +1175,16 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 	if (r != 0)
 		debug("%s: control virtqueue busy!?\n", device_get_name(sc->dev));
 
-	r = virtio_enqueue_reserve(vsc, vq, slot, 3);
+	int nombre = sc->sc_ctrl_cmd_nseg + sc->sc_ctrl_rx_nseg + sc->sc_ctrl_status_nseg;
+	//r = virtio_enqueue_reserve(vsc, vq, slot, 3);
+	r = virtio_enqueue_reserve(vsc, vq, slot, nombre + 2);
+
 
 	debug("after virtio_enqueue_reserve\n");
 
 	if (r != 0)
 		debug("%s: control vq busy!?\n", device_get_name(sc->dev));
 
-	//*(sc->sc_tx_dmamaps).dmat->segs, 0,
 	debug("slot: %d", slot);
 	virtio_enqueue(vsc, vq, slot,
 			sc->sc_ctrl_cmd_segment,
@@ -1759,6 +1761,7 @@ vioif_attach(device_t dev)
 
 	/* Interface for the device switch */
 	strlcpy(ifp->if_xname, device_get_name(dev), IFNAMSIZ);
+	//strlcpy(ifp->if_xname, "vtnet0", 7);
 	ifp->if_softc = vsc;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	ifp->if_start = vioif_start;

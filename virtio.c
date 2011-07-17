@@ -514,18 +514,15 @@ notify:
 		vq_sync_aring(sc, vq, BUS_DMASYNC_PREWRITE);    
 		debug("after vq_sync_aring\n");
 
-
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_queued, 4,
 				  BUS_SPACE_BARRIER_WRITE);
 		debug("bus_space_barrier write\n");
-
 
 		vq->vq_queued++;
 		debug("incr vq_queued\n");
 
 		vq_sync_uring(sc, vq, BUS_DMASYNC_POSTREAD);
 		debug("after vq_sync_aring postread\n");
-
 
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_used->flags, 2,
 				  BUS_SPACE_BARRIER_READ);
