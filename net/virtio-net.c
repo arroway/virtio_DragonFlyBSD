@@ -1176,7 +1176,7 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 		debug("%s: control vq busy!?\n", device_get_name(sc->dev));
 
 	//*(sc->sc_tx_dmamaps).dmat->segs, 0,
-	/*(vsc, vq, slot,
+	/*virtio_enqueue(vsc, vq, slot,
 			sc->sc_ctrl_cmd_segment,
 			sc->sc_ctrl_cmd_nseg,
 			sc->sc_ctrl_cmd_dmamap,
