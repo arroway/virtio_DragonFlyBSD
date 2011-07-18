@@ -1,3 +1,5 @@
+// sysctl node; mstohz;
+
 /*
  * Copyright (c) 2010 Minoura Makoto.
  * All rights reserved.
@@ -55,6 +57,9 @@
 #include <vm/vm_page.h>
 #include <sys/queue.h>
 #include <sys/malloc.h>
+#include <sys/kernel.h>
+#include <sys/_timeval.h>
+#include <sys/time.h>
 
 
 #include "virtiovar.h"
@@ -454,25 +459,28 @@ static void
 viomb_thread(void *arg)
 {
 	struct viomb_softc *sc = arg;
-	int sleeptime, r;
+	int r;
+	struct timeval sleeptime;
+
+	sleeptime.tv_usec = 0;
 
 	while(1){
 
-		sleeptime = 30000;
+		sleeptime.tv_sec = 30000;
 		if (sc->sc_npages > sc->sc_actual + sc->sc_inflight){
 
 			if (sc->sc_inflight == 0) {
 				r = inflate(sc);
 				if (r != 0)
-					sleeptime = 10000;
+					sleeptime.tv_sec = 10000;
 				else
-					sleeptime = 1000;
+					sleeptime.tv_sec = 1000;
 			} else
-				sleeptime = 100;
+				sleeptime.tv_sec = 100;
 		} else if (sc->sc_npages < sc->sc_actual + sc->sc_inflight) {
 			if (sc->sc_inflight == 0)
 				r = deflate(sc);
-			sleeptime = 100;
+			sleeptime.tv_sec = 100;
 		}
 
 	again:
@@ -496,8 +504,7 @@ viomb_thread(void *arg)
 
 		//mstohz function: milliseconds to clock ticks
 		//The process/thread will sleep at most timo / hz seconds
-		//cv_timedwait(&sc->sc_wait, &sc->sc_waitlock,
-		//	     mstohz(sleeptime));
+		cv_timedwait(&sc->sc_wait, &sc->sc_waitlock, tvtohz_low(&sleeptime));
 		lockmgr(&sc->sc_waitlock, LK_RELEASE);
 	}
 }
