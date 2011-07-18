@@ -85,6 +85,8 @@
 void vioif_identify(driver_t *driver, device_t parent);
 static int vioif_attach(device_t dev);
 static int vioif_detach(device_t dev);
+static int vioif_destroy_vq(struct vioif_softc *, struct virtio_softc *, int, bool);
+
 
 /* ifnet interface functions */
 static void vioif_init(void *);
@@ -114,7 +116,6 @@ static int	vioif_set_allmulti(struct vioif_softc *, bool);
 static int	vioif_set_rx_filter(struct vioif_softc *);
 static int	vioif_rx_filter(struct vioif_softc *);
 static int	vioif_ctrl_vq_done(struct virtqueue *);
-static int  vioif_destroy_vq(struct vioif_softc *, struct virtio_softc *, int);
 static void vioif_deferred_init(device_t );
 static void vioif_set_promisc_init(void *);
 
@@ -1815,45 +1816,14 @@ vioif_detach(device_t dev)
 	struct vioif_softc *sc = device_get_softc(dev);
 	device_t pdev = device_get_parent(sc->dev);
 	struct virtio_softc *vsc = device_get_softc(pdev);
+	//struct virtqueue *vq = &vsc->sc_vqs[RX_VQ];
 
-	vioif_destroy_vq(sc, vsc, RX_VQ); /* destroy rx vq */
-	vioif_destroy_vq(sc, vsc, TX_VQ); /* destroy tx vq */
-	vioif_destroy_vq(sc, vsc, CTRL_VQ); /* destroy ctrl vq */
+	vioif_destroy_vq(sc, vsc, RX_VQ, false); /* destroy rx vq */
+	vioif_destroy_vq(sc, vsc, TX_VQ, false); /* destroy tx vq */
+	vioif_destroy_vq(sc, vsc, CTRL_VQ, false); /* destroy ctrl vq */
 
 	/* anything else ? */
-	//lwkt_serialize_exit(&sc->sc_serializer);
-
-	return 0;
-}
-
-/* Unload and free &sc->sc_vq[numq] */
-static int
-vioif_destroy_vq( struct vioif_softc *sc, struct virtio_softc *vsc, int numq){
-
-	struct virtqueue *vq = &vsc->sc_vqs[numq];
-	int i;
-
-
-	for (i=0; i<sc->sc_vq[numq].vq_num; i++){
-
-		/* rx header dmamap destroy */
-		bus_dmamap_unload(vsc->requests_dmat, sc->sc_arrays[i]);
-		bus_dmamap_destroy(vsc->requests_dmat, sc->sc_arrays[i]);
-
-		/* rx dmamap destroy */
-		bus_dmamap_unload(vsc->requests_dmat, sc->sc_rx_dmamaps[i]);
-		bus_dmamap_destroy(vsc->requests_dmat, sc->sc_rx_dmamaps[i]);
-
-
-		/*tx header destroy */
-		bus_dmamap_unload(vsc->requests_dmat, sc->sc_txhdr_dmamaps[i]);
-		bus_dmamap_destroy(vsc->requests_dmat, sc->sc_txhdr_dmamaps[i]);
-
-		/* tx dmamap destroy */
-		bus_dmamap_unload(vsc->requests_dmat, sc->sc_tx_dmamaps[i]);
-		bus_dmamap_destroy(vsc->requests_dmat, sc->sc_tx_dmamaps[i]);
-
-	}
+	lwkt_serialize_exit(&sc->sc_serializer);
 
 	/* Control virtqueue class & command dmamap destroy */
 	bus_dmamap_unload(vsc->requests_dmat, sc->sc_ctrl_cmd_dmamap);
@@ -1881,11 +1851,10 @@ vioif_destroy_vq( struct vioif_softc *sc, struct virtio_softc *vsc, int numq){
 		sc->sc_rxhdr_dmamaps = 0;
 	}
 
-	bus_dma_tag_destroy(vsc->payloads_dmat); // ?
 	bus_dma_tag_destroy(vsc->requests_dmat);
 
 	virtio_reset(vsc);
-	virtio_free_vq(vsc, &vsc->sc_vqs[numq]);
+	//virtio_free_vq(vsc, &vsc->sc_vqs[numq]); in vioif_destroy_vq
 
 	kfree(sc->sc_rxhdr_nseg, M_DEVBUF);
 	kfree(sc->sc_txhdr_nseg, M_DEVBUF);
@@ -1902,13 +1871,56 @@ vioif_destroy_vq( struct vioif_softc *sc, struct virtio_softc *vsc, int numq){
 
 	/*unload and free virtqueue*/
 
-	kfree(vq->vq_entries, M_DEVBUF);
-	bus_dmamap_unload(vq->vq_dmat, vq->vq_dmamap);
-	bus_dmamem_free(vq->vq_dmat, vq->vq_vaddr, vq->vq_dmamap);
-	bus_dma_tag_destroy(vq->vq_dmat);
-	memset(vq, 0, sizeof(*vq));
+	vioif_destroy_vq(sc, vsc, RX_VQ, true); /* destroy rx vq */
+	vioif_destroy_vq(sc, vsc, TX_VQ, true); /* destroy tx vq */
+	vioif_destroy_vq(sc, vsc, CTRL_VQ, true); /* destroy ctrl vq */
 
 	/* free net-related stuff */
+
+	return 0;
+}
+
+/* Unload and free &sc->sc_vq[numq] */
+static int
+vioif_destroy_vq( struct vioif_softc *sc, struct virtio_softc *vsc, int numq, bool go_on){
+
+	struct virtqueue *vq = &vsc->sc_vqs[numq];
+	int i;
+
+	if (!go_on){
+		for (i=0; i<sc->sc_vq[numq].vq_num; i++){
+
+			/* rx header dmamap destroy */
+			bus_dmamap_unload(vsc->requests_dmat, sc->sc_arrays[i]);
+			bus_dmamap_destroy(vsc->requests_dmat, sc->sc_arrays[i]);
+
+			/* rx dmamap destroy */
+			bus_dmamap_unload(vsc->requests_dmat, sc->sc_rx_dmamaps[i]);
+			bus_dmamap_destroy(vsc->requests_dmat, sc->sc_rx_dmamaps[i]);
+
+
+			/*tx header destroy */
+			bus_dmamap_unload(vsc->requests_dmat, sc->sc_txhdr_dmamaps[i]);
+			bus_dmamap_destroy(vsc->requests_dmat, sc->sc_txhdr_dmamaps[i]);
+
+			/* tx dmamap destroy */
+			bus_dmamap_unload(vsc->requests_dmat, sc->sc_tx_dmamaps[i]);
+			bus_dmamap_destroy(vsc->requests_dmat, sc->sc_tx_dmamaps[i]);
+		}
+
+	} else {
+
+		/*unload and free virtqueue*/
+
+		virtio_free_vq(vsc, vq);
+
+		kfree(vq->vq_entries, M_DEVBUF);
+		bus_dmamap_unload(vq->vq_dmat, vq->vq_dmamap);
+		bus_dmamem_free(vq->vq_dmat, vq->vq_vaddr, vq->vq_dmamap);
+		bus_dma_tag_destroy(vq->vq_dmat);
+		memset(vq, 0, sizeof(*vq));
+
+	}
 
 	return 0;
 }
