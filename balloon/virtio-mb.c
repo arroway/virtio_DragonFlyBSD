@@ -52,6 +52,7 @@
 #include <sys/mplock2.h>
 #include <vm/vm_extern.h>
 #include <vm/vm.h>
+#include <vm/vm_page.h>
 #include <sys/queue.h>
 #include <sys/malloc.h>
 
@@ -243,10 +244,12 @@ inflate(struct viomb_softc *sc)
 	b->bl_nentries = nvpages;
 	i = 0;
 
-	// struct pglist ? pageq.queue ?
-	/*TAILQ_FOREACH(p, &b->bl_pglist, pageq.queue) {
+	TAILQ_FOREACH(p,
+			&b->bl_pglist,
+			pageq ){
+			//pageq.queue) {
 	b->bl_pages[i++] = p->phys_addr / VIRTIO_PAGE_SIZE;
-	}*/
+	}
 	KKASSERT(i == nvpages);
 
 	//after callback function and bus_dmamap_load in viomb_attach
@@ -267,7 +270,6 @@ inflate(struct viomb_softc *sc)
 	}
 
 	bus_dmamap_sync(vsc->requests_dmat, b->bl_dmamap, BUS_DMASYNC_PREWRITE);
-	//virtio_enqueue(vsc, vq, slot, b->bl_dmamap, true);
 	virtio_enqueue(vsc, vq, slot, b->bl_dmamap_segment, b->bl_dmamap_nseg, b->bl_dmamap, true );
 	virtio_enqueue_commit(vsc, vq, slot, true);
 	sc->sc_inflight += nvpages;
@@ -294,7 +296,37 @@ inflateq_done(struct virtqueue *vq)
 static int
 inflate_done(struct viomb_softc *sc)
 {
-	return 0;
+	struct virtio_softc *vsc = sc->sc_virtio;
+	struct virtqueue *vq = &sc->sc_vq[INFL_VQ];
+	struct balloon_req *b;
+	int r, slot;
+	uint64_t nvpages;
+	struct vm_page *p;
+
+	r = virtio_dequeue(vsc, vq, &slot, NULL);
+	if (r != 0) {
+		debug("inflate dequeue failed, errno %d.\n", r);
+		return 1;
+	}
+
+	virtio_dequeue_commit(vsc, vq, slot);
+
+	b = &sc->sc_req;
+	nvpages = b->bl_nentries;
+	bus_dmamap_sync(vsc->requests_dmat, b->bl_dmamap, BUS_DMASYNC_POSTWRITE);
+	while (!TAILQ_EMPTY(&b->bl_pglist)) {
+		p = TAILQ_FIRST(&b->bl_pglist);
+		TAILQ_REMOVE(&b->bl_pglist, p, pageq);
+		TAILQ_INSERT_TAIL(&sc->sc_balloon_pages, p, pageq);
+	}
+
+	sc->sc_inflight -= nvpages;
+	bus_space_write_4(vsc->sc_iot, vsc->sc_ioh,
+				     VIRTIO_BALLOON_CONFIG_ACTUAL,
+				     sc->sc_actual + nvpages);
+	viomb_read_config(sc);
+
+	return 1;
 }
 
 
@@ -304,7 +336,58 @@ inflate_done(struct viomb_softc *sc)
 static int
 deflate(struct viomb_softc *sc)
 {
+	struct virtio_softc *vsc = sc->sc_virtio;
+	int i, slot;
+	uint64_t nvpages, nhpages;
+	struct balloon_req *b;
+	struct vm_page *p;
+	struct virtqueue *vq = &sc->sc_vq[DEFL_VQ];
+
+	nvpages = (sc->sc_actual + sc->sc_inflight) - sc->sc_npages;
+
+	if (nvpages > PGS_PER_REQ)
+		nvpages = PGS_PER_REQ;
+
+	nhpages = nvpages * VIRTIO_PAGE_SIZE / PAGE_SIZE;
+
+	b = &sc->sc_req;
+	b->bl_nentries = nvpages;
+	TAILQ_INIT(&b->bl_pglist);
+	for (i = 0; i < nhpages; i++) {
+		p = TAILQ_FIRST(&sc->sc_balloon_pages);
+		TAILQ_REMOVE(&sc->sc_balloon_pages, p, pageq);
+		TAILQ_INSERT_TAIL(&b->bl_pglist, p, pageq);
+		b->bl_pages[i] = p->phys_addr / VIRTIO_PAGE_SIZE;
+	}
+
+	if (virtio_enqueue_prep(vsc, vq, &slot) != 0) {
+		debug("deflate enqueue failed.\n");
+		TAILQ_FOREACH_REVERSE(p, &b->bl_pglist, pglist, pageq) {
+			TAILQ_REMOVE(&b->bl_pglist, p, pageq);
+			TAILQ_INSERT_HEAD(&sc->sc_balloon_pages, p, pageq);
+		}
+		return 0;
+	}
+
+	if (virtio_enqueue_reserve(vsc, vq, slot, 1) != 0) {
+		debug("deflate enqueue failed.\n");
+		TAILQ_FOREACH_REVERSE(p, &b->bl_pglist, pglist, pageq) {
+			TAILQ_REMOVE(&b->bl_pglist, p, pageq);
+			TAILQ_INSERT_HEAD(&sc->sc_balloon_pages, p, pageq);
+		}
+		return 0;
+	}
+
+	bus_dmamap_sync(vsc->requests_dmat, b->bl_dmamap, BUS_DMASYNC_PREWRITE);
+	virtio_enqueue(vsc, vq, slot, b->bl_dmamap_segment, b->bl_dmamap_nseg, b->bl_dmamap, true);
+	virtio_enqueue_commit(vsc, vq, slot, true);
+	sc->sc_inflight -= nvpages;
+
+	if (!(vsc->sc_features & VIRTIO_BALLOON_F_MUST_TELL_HOST))
+		contigfree(&b->bl_pglist, nhpages*PAGE_SIZE, M_DEVBUF);
+
 	return 0;
+
 }
 
 
@@ -327,7 +410,38 @@ deflateq_done(struct virtqueue *vq)
 static int
 deflate_done(struct viomb_softc *sc)
 {
-	return 0;
+	struct virtio_softc *vsc = sc->sc_virtio;
+	struct virtqueue *vq = &sc->sc_vq[DEFL_VQ];
+	struct balloon_req *b;
+	int r, slot;
+	uint64_t nvpages, nhpages;
+
+	r = virtio_dequeue(vsc, vq, &slot, NULL);
+
+	if (r != 0) {
+		debug("deflate dequeue failed, errno %d\n", r);
+		return 1;
+	}
+	virtio_dequeue_commit(vsc, vq, slot);
+
+	b = &sc->sc_req;
+	nvpages = b->bl_nentries;
+	nhpages = nvpages * VIRTIO_PAGE_SIZE / PAGE_SIZE;
+	bus_dmamap_sync(vsc->requests_dmat, b->bl_dmamap, BUS_DMASYNC_POSTWRITE);
+
+	if (vsc->sc_features & VIRTIO_BALLOON_F_MUST_TELL_HOST)
+		contigfree(&b->bl_pglist, nhpages*PAGE_SIZE, M_DEVBUF);
+
+	sc->sc_inflight += nvpages;
+	bus_space_write_4(vsc->sc_iot, vsc->sc_ioh,
+				     VIRTIO_BALLOON_CONFIG_ACTUAL,
+				     sc->sc_actual - nvpages);
+	viomb_read_config(sc);
+
+	return 1;
+
+
+
 }
 
 
