@@ -1818,12 +1818,13 @@ vioif_detach(device_t dev)
 	struct virtio_softc *vsc = device_get_softc(pdev);
 	//struct virtqueue *vq = &vsc->sc_vqs[RX_VQ];
 
+	cv_destroy(&sc->sc_ctrl_wait);
+	lockuninit(&sc->sc_ctrl_wait_lock);
+	lwkt_serialize_exit(&sc->sc_serializer);
+
 	vioif_destroy_vq(sc, vsc, RX_VQ, false); /* destroy rx vq */
 	vioif_destroy_vq(sc, vsc, TX_VQ, false); /* destroy tx vq */
 	vioif_destroy_vq(sc, vsc, CTRL_VQ, false); /* destroy ctrl vq */
-
-	/* anything else ? */
-	lwkt_serialize_exit(&sc->sc_serializer);
 
 	/* Control virtqueue class & command dmamap destroy */
 	bus_dmamap_unload(vsc->requests_dmat, sc->sc_ctrl_cmd_dmamap);
