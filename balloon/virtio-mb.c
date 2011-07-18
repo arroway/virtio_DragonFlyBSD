@@ -117,6 +117,7 @@ static int	balloon_initialized = 0; /* multiple balloon is not allowed */
 static int	viomb_probe(device_t);
 static void	viomb_attach(device_t);
 static void viomb_detach(device_t);
+static int vioif_destroy_vq(struct viomb_softc *, struct virtio_softc *, int);
 static void	viomb_read_config(struct viomb_softc *);
 static int	viomb_config_change(struct virtio_softc *);
 static int	inflate(struct viomb_softc *);
@@ -557,7 +558,7 @@ viomb_attach(device_t dev)
 
 	r = bus_dmamap_load(vsc->requests_dmat,
 			sc->sc_req.bl_dmamap,
-			sc->sc_req.bl_pages[0],
+			sc->sc_req.bl_pages[INFL_VQ],
 			sizeof(uint32_t) * PGS_PER_REQ,
 			bl_callback,
 			sc,
@@ -610,14 +611,51 @@ err:
 static void
 viomb_detach(device_t dev)
 {
+
+	kprintf("%s \n",__FUNCTION__);
+	struct viomb_softc *sc = device_get_softc(dev);
+	device_t pdev = device_get_parent(sc->sc_dev);
+	struct virtio_softc *vsc = device_get_softc(pdev);
+	int i;
+
+	cv_destroy(&sc->sc_wait);
+	lockuninit(&sc->sc_waitlock);
+
+	bus_dmamap_destroy(vsc->requests_dmat, sc->sc_req.bl_dmamap);
+
+	bus_dma_tag_destroy(vsc->requests_dmat);
+
+	virtio_reset(vsc);
+	virtio_free_vq(vsc, &vsc->sc_vqs[INFL_VQ]);
+	virtio_free_vq(vsc, &vsc->sc_vqs[DEFL_VQ]);
+
+	vioif_destroy_vq(sc, vsc, INFL_VQ); /* destroy inflate vq */
+	vioif_destroy_vq(sc, vsc, DEFL_VQ); /* destroy deflate vq */
+
+
+
+
 	/* destroy nodes */
 	//sysctl_destroyv;
 	return;
 }
 
 
+/* Unload and free &sc->sc_vq[numq] */
+static int
+vioif_destroy_vq( struct viomb_softc *sc, struct virtio_softc *vsc, int numq){
 
+	struct virtqueue *vq = &vsc->sc_vqs[numq];
+	int i;
 
+	kfree(vq->vq_entries, M_DEVBUF);
+	bus_dmamap_unload(vq->vq_dmat, vq->vq_dmamap);
+	bus_dmamem_free(vq->vq_dmat, vq->vq_vaddr, vq->vq_dmamap);
+	bus_dma_tag_destroy(vq->vq_dmat);
+	memset(vq, 0, sizeof(*vq));
+
+	return 0;
+}
 
 
 
