@@ -680,8 +680,7 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 
 		if (!write)
 			vd[s].flags |= VRING_DESC_F_WRITE;
-		debug("s:%d addr:0x%llu len:%lu\n", s, 
-		      (unsigned long long)vd[s].addr,(unsigned long) vd[s].len);
+		debug("s:%d addr:0x%08X len:%lu\n", s, vd[s].addr,(unsigned long) vd[s].len);
 		s = vd[s].next;
 		debug("i = %d, next :%08X", i, vd[s].next );
 	}

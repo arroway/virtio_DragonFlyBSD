@@ -242,14 +242,14 @@ struct vioif_softc {
 	bus_dmamap_t		*sc_arrays;
 #define sc_rxhdr_dmamaps sc_arrays
 	int 				*sc_rxhdr_nseg;
-	int 				*sc_nseg_temp_rx; /* temp */
-	bus_dma_segment_t 	*sc_rxhdr_segment;
+	int 				sc_nseg_temp_rx; /* temp */
+	bus_dma_segment_t 	**sc_rxhdr_segment;
 	bus_dma_segment_t 	*sc_segment_temp_rx; /* temp */
 
 	/* Reception */
 	bus_dmamap_t		*sc_rx_dmamaps;
 	int 				*sc_rx_nseg;
-	bus_dma_segment_t	*sc_rx_segment;
+	bus_dma_segment_t	**sc_rx_segment;
 	struct mbuf			**sc_rx_mbufs;
 
 
@@ -257,14 +257,14 @@ struct vioif_softc {
 	/* Transmission header */
 	bus_dmamap_t 		*sc_txhdr_dmamaps;
 	int 				*sc_txhdr_nseg;
-	int 				*sc_nseg_temp_tx; /* temp */
-	bus_dma_segment_t 	*sc_txhdr_segment;
+	int 				sc_nseg_temp_tx; /* temp */
+	bus_dma_segment_t 	**sc_txhdr_segment;
 	bus_dma_segment_t 	*sc_segment_temp_tx; /* temp */
 
 	/* Transmission */
 	bus_dmamap_t 		*sc_tx_dmamaps;
 	int 				*sc_tx_nseg;
-	bus_dma_segment_t 	*sc_tx_segment;
+	bus_dma_segment_t 	**sc_tx_segment;
 	struct mbuf			**sc_tx_mbufs;
 
 	enum  {
