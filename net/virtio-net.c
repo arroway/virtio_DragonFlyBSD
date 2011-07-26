@@ -1979,7 +1979,6 @@ vioif_destroy_vq( struct vioif_softc *sc, struct virtio_softc *vsc, int numq, bo
 
 		virtio_free_vq(vsc, vq);
 
-		kfree(vq->vq_entries, M_DEVBUF);
 		bus_dmamap_unload(vq->vq_dmat, vq->vq_dmamap);
 		bus_dmamem_free(vq->vq_dmat, vq->vq_vaddr, vq->vq_dmamap);
 		bus_dma_tag_destroy(vq->vq_dmat);
