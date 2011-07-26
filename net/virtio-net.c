@@ -137,11 +137,11 @@ static void
 rxhdr_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int error)
 {
 
-	debug("callback is called\n");
+	//debug("callback is called\n");
 	struct vioif_softc *sc = (struct vioif_softc *) callback_arg;
 	int i;
 
-	debug("sc affectation is okay\n");
+	//debug("sc affectation is okay\n");
 
 	if (error != 0){
 		debug("error %u in rxhdr_load_callback\n", error);
@@ -150,16 +150,16 @@ rxhdr_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int e
 
 	sc->sc_vq[RX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
 
-	debug("vq.num okay\n");
+	//debug("vq.num okay\n");
 
 	/* Temporarily save information there */
 	sc->sc_nseg_temp_rx = nseg; /* How much segments there is */
-	debug("nseg okay\n");
+	//debug("nseg okay\n");
 
 	for(i=0; i<nseg ; i++){
 		sc->sc_segment_temp_rx[i] = segs[i]; /* Save segments information */
 	}
-	debug("segment okay\n");
+	//debug("segment okay\n");
 
     return;
 }
@@ -206,9 +206,12 @@ cmd_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int err
 
 	/* Temporarily save information there */
 	sc->sc_ctrl_nseg_temp = nseg; /* How many segments there is */
+	debug("nseg = %d", nseg);
 
 	for(i = 0; i<nseg ; i++){
 		sc->sc_ctrl_segment_temp[i] = segs[i]; /* Save segments information */
+		debug("seg %d len:%08X, sc->len: %08X \n", i, segs[i].ds_len, sc->sc_ctrl_segment_temp[i].ds_len);
+
 	}
 
     return;
@@ -614,7 +617,8 @@ vioif_alloc_mems(struct vioif_softc *sc)
 			bus_dma_segment_t **,
 			(rxqsize * sizeof(bus_dma_segment_t *)), M_DEVBUF, M_ZERO);
 
-	/* temp */
+	/* temp
+	 * bug in size */
 	MALLOC(sc->sc_segment_temp_rx,
 			bus_dma_segment_t *,
 			(rxqsize * sizeof(bus_dma_segment_t)), M_DEVBUF, M_ZERO);
@@ -736,7 +740,7 @@ vioif_alloc_mems(struct vioif_softc *sc)
 	sc->sc_rx_mbufs = (void*) (sc->sc_tx_dmamaps + txqsize);
 	sc->sc_tx_mbufs = sc->sc_rx_mbufs + rxqsize;
 
-	//debug("after affectations\n");
+	debug("after affectations\n");
 
 	/* Rx allocation - for each slot */
 	for (i = 0; i < rxqsize; i++){
@@ -762,7 +766,7 @@ vioif_alloc_mems(struct vioif_softc *sc)
 				"rx_payload");
 	}
 
-	//debug("after rx header allocation\n");
+	debug("after rx header allocation\n");
 
 	/* Tx allocation - for each slot */
 	for (i = 0; i < txqsize; i++){
@@ -788,7 +792,7 @@ vioif_alloc_mems(struct vioif_softc *sc)
 				"tx_payload");
 	}
 
-	//debug("after tx header allocation\n");
+	debug("after tx header allocation\n");
 
 	/* Control virtqueue allocation - commands for the control virtqueue */
 	if (vsc->sc_nvqs == 3){
@@ -803,11 +807,18 @@ vioif_alloc_mems(struct vioif_softc *sc)
 				0);
 
 		sc->sc_ctrl_cmd_nseg = sc->sc_ctrl_nseg_temp;
-		sc->sc_ctrl_cmd_segment = sc->sc_ctrl_segment_temp;
+
+		if (sc->sc_ctrl_cmd_nseg == 1)
+			sc->sc_ctrl_cmd_segment = sc->sc_ctrl_segment_temp;
+		else
+			debug("ctrl_cmd_segment: more than one segment");
 
 		if (r != 0)
 			dmamap_error(sc, r, allocsize2, "control command");
 
+		debug("\n 0 cmd seg len: %08X ", sc->sc_ctrl_cmd_segment[0].ds_len);
+		debug("1 cmd seg len: %08X ", sc->sc_ctrl_cmd_segment[1].ds_len);
+		debug("2 cmd seg len: %08X \n", sc->sc_ctrl_cmd_segment[2].ds_len);
 
 		/* Control virtqueue status*/
 		r = bus_dmamap_load(vsc->requests_dmat,
@@ -819,7 +830,13 @@ vioif_alloc_mems(struct vioif_softc *sc)
 				0);
 
 		sc->sc_ctrl_status_nseg = sc->sc_ctrl_nseg_temp;
-		sc->sc_ctrl_status_segment = sc->sc_ctrl_segment_temp;
+
+
+		if (sc->sc_ctrl_status_nseg == 1)
+			sc->sc_ctrl_status_segment = sc->sc_ctrl_segment_temp;
+		else
+			debug("ctrl_status_segment: more than one segment");
+
 
 		if (r != 0)
 			dmamap_error(sc, r, allocsize2, "control status");
@@ -836,10 +853,17 @@ vioif_alloc_mems(struct vioif_softc *sc)
 				0);
 
 		sc->sc_ctrl_rx_nseg = sc->sc_ctrl_nseg_temp;
-		sc->sc_ctrl_rx_segment = sc->sc_ctrl_segment_temp;
+
+		if (sc->sc_ctrl_rx_nseg == 1)
+			sc->sc_ctrl_rx_segment = sc->sc_ctrl_segment_temp;
+		else
+			debug("ctrl_rx_segment: more than one segment");
+
 
 		if (r != 0)
 			dmamap_error(sc, r, allocsize2, "rx mode control command");
+
+
 
 		//debug("after ctrl rx header allocation\n");
 
@@ -1189,9 +1213,9 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	debug("lockmgr LK_RELEASE\n");
 
-	sc->sc_ctrl_cmd->class = VIRTIO_NET_CTRL_RX;
-	sc->sc_ctrl_cmd->command = cmd;
-	sc->sc_ctrl_rx->onoff = onoff;
+	sc->sc_ctrl_cmd->class = (uint8_t) VIRTIO_NET_CTRL_RX;
+	sc->sc_ctrl_cmd->command = (uint8_t) cmd;
+	sc->sc_ctrl_rx->onoff = (uint8_t) onoff;
 
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_cmd_dmamap,BUS_DMASYNC_PREWRITE);
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_rx_dmamap,BUS_DMASYNC_PREWRITE);
@@ -1234,6 +1258,16 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 			sc->sc_ctrl_status_nseg,
 			sc->sc_ctrl_status_dmamap,
 			false);
+
+
+	debug("\n virtio_net_ctrl_rx len:%08X\n", sizeof(*sc->sc_ctrl_rx));
+	debug(" struct virtio_net_ctrl_rx len:%08X\n", sizeof(struct virtio_net_ctrl_rx));
+
+	debug(" virtio_net_ctrl_status len:%08X\n", sizeof(*sc->sc_ctrl_status));
+	debug(" struct virtio_net_ctrl_status len:%08X\n", sizeof(struct virtio_net_ctrl_status));
+
+	debug(" virtio_net_ctrl_cmd len:%08X\n", sizeof(*sc->sc_ctrl_cmd));
+	debug(" struct virtio_net_ctrl_cmd len:%08X\n", sizeof(struct virtio_net_ctrl_cmd));
 
 	virtio_enqueue_commit(vsc, vq, slot, true);
 
@@ -1766,11 +1800,11 @@ vioif_attach(device_t dev)
 
 	/* Memory allocation for the control queue (for virtio_softc) */
 	if (vioif_alloc_mems(sc) < 0){
-		debug("vioif_alloc_mems(sc) failed !\n");
+		//debug("vioif_alloc_mems(sc) failed !\n");
 		goto err;
 	}
-
-	debug("sortie du if \n");
+	return 0;
+	//debug("sortie du if \n");
 
 	/* Set promiscuous mode off at starting. Needs interrupt */
 	lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
@@ -1820,7 +1854,7 @@ vioif_attach(device_t dev)
     return 0;
 
 err:
-	debug("failure\n");
+	//debug("failure\n");
 	if (vsc->sc_nvqs == 3) {
 		virtio_free_vq(vsc, &sc->sc_vq[CTRL_VQ]);
 		cv_destroy(&sc->sc_ctrl_wait);
@@ -1850,7 +1884,7 @@ vioif_detach(device_t dev)
 
 	cv_destroy(&sc->sc_ctrl_wait);
 	lockuninit(&sc->sc_ctrl_wait_lock);
-	lwkt_serialize_exit(&sc->sc_serializer);
+	//lwkt_serialize_exit(&sc->sc_serializer);
 
 	vioif_destroy_vq(sc, vsc, RX_VQ, false); /* destroy rx vq */
 	vioif_destroy_vq(sc, vsc, TX_VQ, false); /* destroy tx vq */
