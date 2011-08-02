@@ -79,7 +79,6 @@
 #define MINSEG_INDIRECT     2 /* use indirect if nsegs >= this value */
 
 
-
 /* Declarations */
 
 void vioif_identify(driver_t *driver, device_t parent);
@@ -443,13 +442,11 @@ static int
 vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t caddr ,struct ucred *data)
 {
 	debug("call");
+	struct vioif_softc *sc = ifp->if_softc;
 	int r;
-	static struct spinlock lock_io;
-
-	spin_init(&lock_io);
 
 	//s = 0; // i.e. s = splnet()
-	spin_lock(&lock_io);
+	spin_lock(&sc->lock_io);
 
 	r = ether_ioctl(ifp, cmd, (caddr_t)data);
 
@@ -457,12 +454,12 @@ vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t caddr ,struct ucred *data)
 			(r == ENETRESET && (cmd == SIOCADDMULTI || cmd == SIOCDELMULTI))){
 
 		if (ifp->if_flags & IFF_RUNNING)
-			r = vioif_rx_filter(ifp->if_softc);
+			r = vioif_rx_filter(sc);
 		else
 			r = 0;
 	}
-	spin_unlock(&lock_io);
-	spin_uninit(&lock_io);
+	spin_unlock(&sc->lock_io);
+	spin_uninit(&sc->lock_io);
 	//splx(s);
 
 	return 0;
@@ -1951,6 +1948,9 @@ vioif_attach(device_t dev)
 
 	if_attach(ifp, NULL);
 	ether_ifattach(ifp, sc->sc_mac, NULL);
+
+	/* spinlock used in vioif_ioctl*/
+	spin_init(&sc->lock_io);
 
 	lwkt_serialize_enter(&sc->sc_serializer);
 
