@@ -112,8 +112,8 @@ struct viomb_softc {
 	struct lwkt_port 	sc_port;
 	struct thread 		*sc_viomb_td;
 
-	int 				sc_nseg_temp;
-	bus_dma_segment_t	*sc_segment_temp;
+	int 				sc_nseg;
+	bus_dma_segment_t	*sc_segment;
 
 };
 
@@ -141,6 +141,7 @@ bl_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int error)
 
 	debug("callback is called\n");
 	struct viomb_softc *sc = (struct viomb_softc *) callback_arg;
+	int i;
 
 	debug("sc affectation is okay\n");
 
@@ -149,8 +150,10 @@ bl_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int error)
 		return;
 	}
 
-	sc->sc_nseg_temp = nseg;
-	sc->sc_segment_temp = segs;
+	sc->sc_nseg = nseg;
+	for(i=0; i< nseg; i++)
+		sc->sc_segment[i] = segs[i];
+
 
 	return;
 }
