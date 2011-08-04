@@ -90,6 +90,7 @@ static int              virtio_attach(device_t dev);
 
 void virtio_set_status(struct virtio_softc *sc, int status)
 {
+	debug("call");
 	int old = 0;
 
 	if (status != 0)
@@ -115,18 +116,21 @@ void virtio_set_status(struct virtio_softc *sc, int status)
 void
 virtio_reset(struct virtio_softc *sc)
 {
+	debug("call");
 	virtio_device_reset(sc);
 }
 
 static inline void
 vq_sync_uring(struct virtio_softc *sc, struct virtqueue *vq, int ops)
 {
+	debug("call");
 	bus_dmamap_sync(sc->requests_dmat, vq->vq_dmamap, ops);
 }
 
 static inline void
 vq_sync_aring(struct virtio_softc *sc, struct virtqueue *vq, int ops)
 {
+	debug("call");
 	bus_dmamap_sync(sc->requests_dmat, vq->vq_dmamap, ops);
 }
 
@@ -134,6 +138,7 @@ vq_sync_aring(struct virtio_softc *sc, struct virtqueue *vq, int ops)
 void
 virtio_reinit_start(struct virtio_softc *sc)
 {
+	debug("call");
 	int i;
 
 	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_ACK);
@@ -163,6 +168,7 @@ virtio_reinit_start(struct virtio_softc *sc)
 void
 virtio_reinit_end(struct virtio_softc *sc)
 {
+	debug("call");
 	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK);
 }
 
@@ -175,6 +181,7 @@ virtio_reinit_end(struct virtio_softc *sc)
 void
 virtio_stop_vq_intr(struct virtio_softc *sc, struct virtqueue *vq)
 {
+	debug("call");
 	vq->vq_avail->flags |= VRING_AVAIL_F_NO_INTERRUPT;
 	vq_sync_aring(sc, vq, BUS_DMASYNC_PREWRITE);
 	vq->vq_queued++;
@@ -183,6 +190,7 @@ virtio_stop_vq_intr(struct virtio_softc *sc, struct virtqueue *vq)
 void
 virtio_start_vq_intr(struct virtio_softc *sc, struct virtqueue *vq)
 {
+	debug("call");
 	vq->vq_avail->flags &= ~VRING_AVAIL_F_NO_INTERRUPT;
 	vq_sync_aring(sc, vq, BUS_DMASYNC_PREWRITE);
 	vq->vq_queued++;
@@ -194,6 +202,7 @@ virtio_start_vq_intr(struct virtio_softc *sc, struct virtqueue *vq)
 static void
 virtio_init_vq(struct virtio_softc *sc, struct virtqueue *vq)
 {
+	debug("call");
 	int i, j;
 	int vq_size = vq->vq_num;
 
@@ -234,6 +243,7 @@ virtio_init_vq(struct virtio_softc *sc, struct virtqueue *vq)
 static void
 virtio_helper(void *arg, bus_dma_segment_t *segs, int nseg, int error)
 {
+	debug("call");
 	struct virtqueue *vq = (struct virtqueue *) arg;
 	debug("%s %u\n",__FUNCTION__,(uint)segs->ds_addr);
 
@@ -243,6 +253,7 @@ virtio_helper(void *arg, bus_dma_segment_t *segs, int nseg, int error)
 int
 virtio_free_vq(struct virtio_softc *sc, struct virtqueue *vq)
 {
+	debug("call");
 	struct vq_entry *qe;
 	int i = 0;
 
@@ -277,6 +288,7 @@ int
 virtio_alloc_vq(struct virtio_softc *sc, struct virtqueue *vq, int index,
 		int maxsegsize, int maxnsegs, const char *name)
 {
+	debug("call");
 	int vq_size, allocsize1, allocsize2, allocsize3, allocsize = 0;
 	int  r;
 	int error;
@@ -403,6 +415,7 @@ err:
 uint8_t
 virtio_read_device_config_1(struct virtio_softc *sc, int index)
 {
+	debug("call");
 	return bus_space_read_1(sc->sc_iot, sc->sc_ioh, 
 				sc->sc_config_offset + index);
 }
@@ -410,6 +423,7 @@ virtio_read_device_config_1(struct virtio_softc *sc, int index)
 uint16_t
 virtio_read_device_config_2(struct virtio_softc *sc, int index)
 {
+	debug("call");
 	return bus_space_read_2(sc->sc_iot, sc->sc_ioh,
 				sc->sc_config_offset + index);
 }
@@ -417,6 +431,7 @@ virtio_read_device_config_2(struct virtio_softc *sc, int index)
 uint32_t
 virtio_read_device_config_4(struct virtio_softc *sc, int index)
 {
+	debug("call");
 	return bus_space_read_4(sc->sc_iot, sc->sc_ioh,
 				sc->sc_config_offset + index);
 }
@@ -424,6 +439,7 @@ virtio_read_device_config_4(struct virtio_softc *sc, int index)
 uint64_t
 virtio_read_device_config_8(struct virtio_softc *sc, int index)
 {
+	debug("call");
 	uint64_t r;
 
 	r = bus_space_read_4(sc->sc_iot, sc->sc_ioh, 
@@ -438,6 +454,7 @@ static inline void
 vq_sync_indirect(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 		 int ops)
 {
+	debug("call");
 	bus_dmamap_sync(sc->requests_dmat, vq->vq_dmamap, ops);
 }
 
@@ -447,6 +464,7 @@ vq_sync_indirect(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 static inline void
 vq_sync_descs(struct virtio_softc *sc, struct virtqueue *vq, int ops)
 {
+	debug("call");
 	bus_dmamap_sync(sc->requests_dmat, vq->vq_dmamap, ops);
 }
 
@@ -456,6 +474,7 @@ vq_free_entry(struct virtqueue *vq, struct vq_entry *qe)
 	kprintf("call of q_free_entry(): vq_num=%u", vq->vq_num);
 	spin_lock(&vq->vq_freelist_lock);
 	TAILQ_INSERT_TAIL(&vq->vq_freelist, qe, qe_list);
+	debug("tailq_insert_tail executed");
 	spin_unlock(&vq->vq_freelist_lock);
 
 	return;
@@ -469,53 +488,79 @@ int
 virtio_enqueue_commit(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 		      bool notifynow)
 {
+	debug("call");
 	struct vq_entry *qe1;
 
 	if (slot < 0) {
 		spin_lock(&vq->vq_aring_lock);
+		//debug("spin_lock\n");
 		goto notify;
 	}
+	//debug("before vq_sync_desc");
 	vq_sync_descs(sc, vq, BUS_DMASYNC_PREWRITE);
+	//debug("vq_sync_desc");
 
 	qe1 = &vq->vq_entries[slot];
-	if (qe1->qe_indirect)
+	if (qe1->qe_indirect){
+		//debug("inside if vq_entries");
 		vq_sync_indirect(sc, vq, slot, BUS_DMASYNC_PREWRITE);
+		//debug("after vq_sync_indirect");
+	}
 
 	spin_lock(&vq->vq_aring_lock);
+	//debug("spin_lock");
 	vq->vq_avail->ring[(vq->vq_avail_idx++) % vq->vq_num] = slot;
+	//debug("affectation");
 
 notify:
+	//debug("notify?\n");
 	if (notifynow) {
+		//debug("in notify\n");
 		vq_sync_aring(sc, vq, BUS_DMASYNC_PREWRITE);
+		//debug("after vq_sync_aring\n");
 		vq_sync_uring(sc, vq, BUS_DMASYNC_PREREAD);
+		//debug("after vq_sync_uring");
 
 
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_avail->idx, 2,
-				  BUS_SPACE_BARRIER_WRITE);
+				BUS_SPACE_BARRIER_WRITE);
+		//debug("bus_space_barrier\n");
 
 		vq->vq_avail->idx = vq->vq_avail_idx;
+		//debug("after affectation\n");
 
 		vq_sync_aring(sc, vq, BUS_DMASYNC_PREWRITE);    
-
+		//debug("after vq_sync_aring\n");
 
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_queued, 4,
 				  BUS_SPACE_BARRIER_WRITE);
+		//debug("bus_space_barrier write\n");
 
 		vq->vq_queued++;
+		//debug("incr vq_queued\n");
 
 		vq_sync_uring(sc, vq, BUS_DMASYNC_POSTREAD);
+		//debug("after vq_sync_aring postread\n");
 
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_used->flags, 2,
 				  BUS_SPACE_BARRIER_READ);
+		//debug("after bus_space_barrier\n");
+
 
 		if (!(vq->vq_used->flags & VRING_USED_F_NO_NOTIFY)) {
+
+			//debug("in if\n");
+
 			bus_space_write_2(sc->sc_iot, sc->sc_ioh,
 					  VIRTIO_CONFIG_QUEUE_NOTIFY,
-					  vq->vq_index); 
+					  vq->vq_index);
+
+			//debug("after bus_space_write\n");
+
 		}
 	}
 	spin_unlock(&vq->vq_aring_lock);
-
+	//debug("end of virito_enqueue_commit\n");
 	return 0;
 }
 
@@ -523,7 +568,9 @@ notify:
  *  Free descriptor management.
  */
 static struct vq_entry *
-vq_alloc_entry(struct virtqueue *vq) {
+vq_alloc_entry(struct virtqueue *vq)
+{
+	debug("call");
 	struct vq_entry *qe;
 
 	spin_lock(&vq->vq_freelist_lock);
@@ -545,6 +592,7 @@ int
 virtio_enqueue_reserve(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 		       int nsegs)
 {
+	debug("call");
 	int indirect;
 	int i, s;
 	struct vq_entry *qe1 = &vq->vq_entries[slot];
@@ -608,6 +656,7 @@ virtio_enqueue_p(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 		 bus_addr_t ds_addr, bus_size_t ds_len, bus_dmamap_t dmamap,
 		 bus_addr_t start, bus_size_t len, bool write)
 {
+	debug("call");
 	struct vq_entry *qe1 = &vq->vq_entries[slot];
 	struct vring_desc *vd = qe1->qe_desc_base;
 	int s = qe1->qe_next;
@@ -632,23 +681,34 @@ int
 virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	       bus_dma_segment_t *segs, int nseg, bus_dmamap_t dmamap, bool write)
 {
+	debug("call");
 	struct vq_entry *qe1 = &vq->vq_entries[slot];
 	struct vring_desc *vd = qe1->qe_desc_base;
 	int i;
 	int s = qe1->qe_next;
 
+	//debug("enter virtio_enqueue");
+
 	KKASSERT(s >= 0);
+	//debug("after KKASSERT");
+
 	for (i = 0; i < nseg; i++) {
+		//debug("in for loop");
+
+		debug("i = %d, addr :%08X", i, segs[i].ds_addr );
+		debug(" i = %d, len :%08X", i, segs[i].ds_len );
+
 		vd[s].addr = segs[i].ds_addr;
 		vd[s].len = segs[i].ds_len;
 		if (!write)
 			vd[s].flags |= VRING_DESC_F_WRITE;
-		debug("s:%d addr:0x%llu len:%lu\n", s, 
-		      (unsigned long long)vd[s].addr,(unsigned long) vd[s].len);
+		//debug("s:%d addr:0x%08X len:%lu\n", s, vd[s].addr,(unsigned long) vd[s].len);
 		s = vd[s].next;
+		//debug("i = %d, next :%08X", i, vd[s].next );
 	}
 
 	qe1->qe_next = s;
+	//debug("out of virtio_enqueue");
 
 	return 0;
 }
@@ -659,6 +719,7 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 int
 virtio_enqueue_prep(struct virtio_softc *sc, struct virtqueue *vq, int *slotp)
 {
+	debug("call");
 	struct vq_entry *qe1;
 
 	KKASSERT(slotp != NULL);
@@ -708,11 +769,13 @@ virtio_vq_intr(struct virtio_softc *sc)
 int
 virtio_enqueue_abort(struct virtio_softc *sc, struct virtqueue *vq, int slot)
 {
+	debug("call");
 	struct vq_entry *qe = &vq->vq_entries[slot];
 	struct vring_desc *vd;
 	int s;
 
 	if (qe->qe_next < 0) {
+		debug("call vq_free_entry");
 		vq_free_entry(vq, qe);
 		return 0;
 	}
@@ -721,9 +784,11 @@ virtio_enqueue_abort(struct virtio_softc *sc, struct virtqueue *vq, int slot)
 	vd = &vq->vq_desc[0];
 	while (vd[s].flags & VRING_DESC_F_NEXT) {
 		s = vd[s].next;
+		debug("call vq_free_entry");
 		vq_free_entry(vq, qe);
 		qe = &vq->vq_entries[s];
 	}
+	debug("call vq_free_entry");
 	vq_free_entry(vq, qe);
 	return 0;
 }
@@ -737,6 +802,7 @@ int
 virtio_dequeue(struct virtio_softc *sc, struct virtqueue *vq, int *slotp,
 	       int *lenp)
 {
+	debug("call");
 	uint16_t slot, usedidx;
 	struct vq_entry *qe;
 
@@ -767,6 +833,7 @@ virtio_dequeue(struct virtio_softc *sc, struct virtqueue *vq, int *slotp,
 int
 virtio_dequeue_commit(struct virtio_softc *sc, struct virtqueue *vq, int slot)
 {
+	debug("call");
 	struct vq_entry *qe = &vq->vq_entries[slot];
 	struct vring_desc *vd = &vq->vq_desc[0];
 	int s = slot;
@@ -774,9 +841,13 @@ virtio_dequeue_commit(struct virtio_softc *sc, struct virtqueue *vq, int slot)
 	while (vd[s].flags & VRING_DESC_F_NEXT) {
 		//kprintf("vringdescnext\n");
 		s = vd[s].next;
+		debug("vq_free_entry 1, s=%d", s);
 		vq_free_entry(vq, qe);
 		qe = &vq->vq_entries[s];
 	}
+
+	debug("vq_free_entry 2, s=%d", s);
+
 	vq_free_entry(vq, qe);
 
 	return 0;
@@ -787,7 +858,7 @@ virtio_dequeue_commit(struct virtio_softc *sc, struct virtqueue *vq, int slot)
 uint32_t
 virtio_negotiate_features(struct virtio_softc *sc, uint32_t guest_features)
 {
-
+	debug("call");
 	uint32_t r;
 
 	guest_features |= VIRTIO_F_RING_INDIRECT_DESC;
