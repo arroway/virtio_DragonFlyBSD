@@ -1282,7 +1282,8 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 		//debug("&sc_ctrl_wait: %08x\n", (unsigned int)&sc->sc_ctrl_wait );
 		//debug("&sc_ctrl_wait_lock: %08x\n", (unsigned int)&sc->sc_ctrl_wait_lock );
 
-		cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
+		//cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
+		lksleep(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock, PCATCH, "lksleep msg", 0);
 		//debug("cv_wait");
 	}
 
@@ -1357,11 +1358,6 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 		debug(" i: %d sc->sc_ctrl_cmd_segment len: %d ", i, sc->sc_ctrl_cmd_segment[i].ds_len);
 	}
 
-	debug("sp");
-	debug("sp");
-	debug("sp");
-	debug("sp");
-
 	virtio_enqueue_commit(vsc, vq, slot, true);
 
 	/* wait for done */
@@ -1370,10 +1366,17 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	debug("lock exclusive\n");
 
-	while (sc->sc_ctrl_inuse != DONE)
-			cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
+	while (sc->sc_ctrl_inuse != DONE){
+		//cv_timedwait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock, 5);
+		//cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
+		lksleep(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock, PCATCH, "lksleep msg", 0);
+		debug("cv_wait, sc->sc_ctrl_inuse=%d", sc->sc_ctrl_inuse);
+	}
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
+
+	debug("lock release\n");
+
 
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_cmd_dmamap, BUS_DMASYNC_POSTWRITE);
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_rx_dmamap, BUS_DMASYNC_POSTWRITE);
@@ -1388,8 +1391,11 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 	sc->sc_ctrl_inuse = ISFREE;
-	cv_signal(&sc->sc_ctrl_wait);
+	//cv_signal(&sc->sc_ctrl_wait);
+	wakeup(&sc->sc_ctrl_wait);
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
+
+	debug("out");
 
 	return r;
 }
@@ -1409,6 +1415,7 @@ vioif_deferred_init(device_t dev)
 	lwkt_initmsg(&sc->sc_lmsg, &sc->sc_port, 0);
 	lwkt_sendmsg(&sc->sc_port, &sc->sc_lmsg);
 
+	debug("outça n");
 	/*r =  vioif_set_promisc(sc, false);
 
 	if (r != 0)
@@ -1449,6 +1456,7 @@ vioif_set_promisc_init(void *arg)
 		ifp->if_flags &= ~IFF_PROMISC;
 
 	lwkt_replymsg(&sc->sc_lmsg, 0);
+	debug("out");
 }
 
 static int
@@ -1458,6 +1466,7 @@ vioif_set_promisc(struct vioif_softc *sc, bool onoff)
 	debug("call");
 
 	r = vioif_ctrl_rx(sc, VIRTIO_NET_CTRL_RX_PROMISC, onoff);
+	debug("out");
 
 	return r;
 }
@@ -1492,7 +1501,8 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 
 	while (sc->sc_ctrl_inuse != ISFREE)
-		cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
+		//cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
+		lksleep(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock, PCATCH, "lksleep msg", 0);
 
 	sc->sc_ctrl_inuse = INUSE;
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
@@ -1569,7 +1579,8 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 
 	while (sc->sc_ctrl_inuse != DONE)
-		cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
+		//cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
+		lksleep(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock, PCATCH, "lksleep msg", 0);
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 
@@ -1592,7 +1603,8 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 out:
 lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 	sc->sc_ctrl_inuse = ISFREE;
-	cv_signal(&sc->sc_ctrl_wait);
+	//cv_signal(&sc->sc_ctrl_wait);
+	wakeup(&sc->sc_ctrl_wait);
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 
 	return r;
@@ -1720,7 +1732,8 @@ vioif_ctrl_vq_done(struct virtqueue *vq)
 	debug("lk_exclusive");
 
 	sc->sc_ctrl_inuse = DONE;
-	cv_signal(&sc->sc_ctrl_wait);
+	//cv_signal(&sc->sc_ctrl_wait);
+	wakeup(&sc->sc_ctrl_wait);
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 	debug("lk_release");
