@@ -289,7 +289,8 @@ viomb_config_change(struct virtio_softc *vsc)
 	old = sc->sc_npages;
 	viomb_read_config(sc);
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
-	cv_signal(&sc->sc_wait);
+	//cv_signal(&sc->sc_wait);
+	wakeup(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
 	debug("lock release");
 	if (sc->sc_npages > old)
@@ -329,7 +330,7 @@ inflate(struct viomb_softc *sc)
 
 	b = &sc->sc_req;
 
-	r = contigmalloc(nhpages*PAGE_SIZE, M_DEVBUF, 0, 0, UINT32_MAX*PAGE_SIZE, 0, 0);
+	r = contigmalloc(nhpages*PAGE_SIZE, M_DEVBUF, M_ZERO, 0, UINT32_MAX*PAGE_SIZE, PAGE_SIZE, 0);
 
 	if (r != NULL){
 		debug("%llu pages of physical memory "
@@ -385,7 +386,8 @@ inflateq_done(struct virtqueue *vq)
 
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
 	sc->sc_inflate_done = DONE;
-	cv_signal(&sc->sc_wait);
+	//cv_signal(&sc->sc_wait);
+	wakeup(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
 	debug("lock_release");
 
@@ -502,7 +504,8 @@ deflateq_done(struct virtqueue *vq)
 
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
 	sc->sc_deflate_done = DONE;
-	cv_signal(&sc->sc_wait);
+	//cv_signal(&sc->sc_wait);
+	wakeup(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
 
 	return 1;
@@ -604,7 +607,8 @@ again:
 
 		//mstohz function: milliseconds to clock ticks
 		//The process/thread will sleep at most timo / hz seconds
-		cv_timedwait(&sc->sc_wait, &sc->sc_waitlock, tvtohz_low(&sleeptime));
+		//cv_timedwait(&sc->sc_wait, &sc->sc_waitlock, tvtohz_low(&sleeptime));
+		lksleep(&sc->sc_wait, &sc->sc_waitlock, PCATCH, "lksleep mesg", tvtohz_low(&sleeptime));
 		lockmgr(&sc->sc_waitlock, LK_RELEASE);
 		debug("lock release");
 	}
