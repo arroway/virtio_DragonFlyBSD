@@ -75,6 +75,9 @@
 
 #define PGS_PER_REQ		(256) /* 1MB, 4KB/page */
 
+#define INUSE 0
+#define DONE 1
+
 CTASSERT((PAGE_SIZE) == (VIRTIO_PAGE_SIZE)); /* XXX */
 
 #define INFL_VQ 0
@@ -112,8 +115,8 @@ struct viomb_softc {
 	struct lwkt_port 	sc_port;
 	struct thread 		*sc_viomb_td;
 
-	int 				sc_nseg;
-	bus_dma_segment_t	*sc_segment;
+	int 				sc_nseg_temp;
+	bus_dma_segment_t	*sc_segment_temp;
 
 };
 
@@ -125,6 +128,7 @@ static void viomb_detach(device_t);
 static int vioif_destroy_vq(struct viomb_softc *, struct virtio_softc *, int);
 static void	viomb_read_config(struct viomb_softc *);
 static int	viomb_config_change(struct virtio_softc *);
+static int viomb_alloc_mems(struct viomb_softc *);
 static int	inflate(struct viomb_softc *);
 static int	inflateq_done(struct virtqueue *);
 static int	inflate_done(struct viomb_softc *);
@@ -150,13 +154,90 @@ bl_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int error)
 		return;
 	}
 
-	sc->sc_nseg = nseg;
+	sc->sc_nseg_temp = nseg;
 	for(i=0; i< nseg; i++)
-		sc->sc_segment[i] = segs[i];
+		sc->sc_segment_temp[i] = segs[i];
+		debug("seg %d len:%08X, sc->sc_segment_temp[i].ds_len: %08X ", i, segs[i].ds_len, sc->sc_segment_temp[i].ds_len);
+
 
 
 	return;
 }
+
+static int
+viomb_alloc_mems(struct viomb_softc *sc)
+{
+	struct virtio_softc *vsc = sc->sc_virtio;
+	int r, allocsize;
+	int infqsize, defqsize;
+
+	infqsize = vsc->sc_vqs[INFL_VQ].vq_num;
+	defqsize = vsc->sc_vqs[DEFL_VQ].vq_num;
+
+
+	debug("affect qsize ok");
+	allocsize = sizeof(struct balloon_req) * infqsize;
+	allocsize += sizeof(struct balloon_req) * defqsize;
+
+
+	debug("affect allocsize");
+
+	MALLOC(sc->sc_segment_temp,
+			bus_dma_segment_t *,
+			(1 * sizeof(bus_dma_segment_t)), M_DEVBUF, M_ZERO);
+
+	debug("malloc 1");
+
+	MALLOC(sc->sc_req.bl_dmamap_segment,
+			bus_dma_segment_t *,
+			allocsize * sizeof(bus_dma_segment_t), M_DEVBUF, M_WAITOK);
+
+	debug("malloc 2");
+
+	r = bus_dma_tag_create(vsc->virtio_dmat,
+				1,
+				0,
+				BUS_SPACE_MAXADDR,
+				BUS_SPACE_MAXADDR,
+				NULL, NULL,
+				allocsize,
+				1,
+				allocsize,
+				BUS_DMA_ALLOCNOW,
+				&vsc->requests_dmat);
+	debug("bus_dma_tag_create aok");
+
+	if (r != 0 ){
+		debug("dma_tag_ creation failed.\n");
+		return 1;
+	}
+
+	r = bus_dmamap_create(vsc->requests_dmat, BUS_DMA_NOWAIT, &(sc->sc_req.bl_dmamap));
+	debug("bus_dmamap_create ok");
+
+	if (r != 0 ){
+		debug("dmamap creation failed.\n");
+		return 1;
+	}
+
+	r = bus_dmamap_load(vsc->requests_dmat,
+			sc->sc_req.bl_dmamap,
+			&sc->sc_req.bl_pages[INFL_VQ],
+			sizeof(uint32_t) * PGS_PER_REQ,
+			bl_callback,
+			sc,
+			0);
+
+	debug("bus_dmamap_load ok");
+
+	if (r != 0 ){
+		debug("dmamap creation failed.\n");
+		return 1;
+	}
+
+	return 0;
+}
+
 
 static int
 //viomb_match(device_t dev, struct cfdata_t match , void *aux){
@@ -166,9 +247,9 @@ viomb_probe(device_t dev)
 	device_t pdev = device_get_parent(dev);
 
 	if(pci_read_config(pdev,PCIR_SUBDEV_0,2) == PCI_PRODUCT_VIRTIO_BALLOON) {
-		debug("parent:%p is net\n", pdev);
+		debug("parent:%p is balloon\n", pdev);
 	} else {
-		debug("parent:%p is not net\n", pdev);
+		debug("parent:%p is not balloon\n", pdev);
 		return 1;
 	}
 
@@ -179,6 +260,7 @@ viomb_probe(device_t dev)
 static void
 viomb_read_config(struct viomb_softc *sc)
 {
+	debug("call");
 	unsigned int reg;
 
 	/* these values are explicitly specified as little-endian */
@@ -188,7 +270,9 @@ viomb_read_config(struct viomb_softc *sc)
 
 	reg = virtio_read_device_config_4(sc->sc_virtio,
 			VIRTIO_BALLOON_CONFIG_ACTUAL);
+	debug("2nd virtio_read_device_config_4 is ok");
 	sc->sc_actual = le32toh(reg);
+	debug("affectation is okay");
 }
 
 
@@ -198,6 +282,7 @@ viomb_read_config(struct viomb_softc *sc)
 static int
 viomb_config_change(struct virtio_softc *vsc)
 {
+	debug("call");
 	struct viomb_softc *sc = device_get_softc(vsc->sc_child);
 	unsigned int old;
 
@@ -206,6 +291,7 @@ viomb_config_change(struct virtio_softc *vsc)
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
 	cv_signal(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
+	debug("lock release");
 	if (sc->sc_npages > old)
 		debug("inflating balloon from %u to %u.\n",
 		       old, sc->sc_npages);
@@ -225,6 +311,7 @@ viomb_config_change(struct virtio_softc *vsc)
 static int
 inflate(struct viomb_softc *sc)
 {
+	debug("call");
 	struct virtio_softc *vsc = sc->sc_virtio;
 	int i, slot;
 	int *r;
@@ -246,7 +333,7 @@ inflate(struct viomb_softc *sc)
 
 	if (r != NULL){
 		debug("%llu pages of physical memory "
-		       "could not be allocated, retrying...\n",nhpages);
+		       "could not be allocated, retrying...\n", nhpages);
 		return 1;	/* sleep longer */
 	}
 
@@ -263,7 +350,9 @@ inflate(struct viomb_softc *sc)
 
 	//after callback function and bus_dmamap_load in viomb_attach
 	b->bl_dmamap_nseg = sc->sc_nseg_temp;
-	b->bl_dmamap_segment = sc->sc_segment_temp;
+	for(i=0; i< sc->sc_nseg_temp; i++){
+		b->bl_dmamap_segment[i] = sc->sc_segment_temp[i];
+	}
 
 	if (virtio_enqueue_prep(vsc, vq, &slot) != 0) {
 		debug("inflate enqueue failed.\n");
@@ -290,13 +379,15 @@ inflate(struct viomb_softc *sc)
 static int
 inflateq_done(struct virtqueue *vq)
 {
+	debug("call");
 	struct virtio_softc *vsc = vq->vq_owner;
 	struct viomb_softc *sc = device_get_softc(vsc->sc_child);
 
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
-	sc->sc_inflate_done = 1;
+	sc->sc_inflate_done = DONE;
 	cv_signal(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
+	debug("lock_release");
 
 	return 1;
 }
@@ -305,6 +396,7 @@ inflateq_done(struct virtqueue *vq)
 static int
 inflate_done(struct viomb_softc *sc)
 {
+	debug("call");
 	struct virtio_softc *vsc = sc->sc_virtio;
 	struct virtqueue *vq = &sc->sc_vq[INFL_VQ];
 	struct balloon_req *b;
@@ -345,6 +437,7 @@ inflate_done(struct viomb_softc *sc)
 static int
 deflate(struct viomb_softc *sc)
 {
+	debug("call");
 	struct virtio_softc *vsc = sc->sc_virtio;
 	int i, slot;
 	uint64_t nvpages, nhpages;
@@ -403,11 +496,12 @@ deflate(struct viomb_softc *sc)
 static int
 deflateq_done(struct virtqueue *vq)
 {
+	debug("call");
 	struct virtio_softc *vsc = vq->vq_owner;
 	struct viomb_softc *sc = device_get_softc(vsc->sc_child);
 
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
-	sc->sc_deflate_done = 1;
+	sc->sc_deflate_done = DONE;
 	cv_signal(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
 
@@ -419,6 +513,7 @@ deflateq_done(struct virtqueue *vq)
 static int
 deflate_done(struct viomb_softc *sc)
 {
+	debug("call");
 	struct virtio_softc *vsc = sc->sc_virtio;
 	struct virtqueue *vq = &sc->sc_vq[DEFL_VQ];
 	struct balloon_req *b;
@@ -461,6 +556,7 @@ deflate_done(struct viomb_softc *sc)
 static void
 viomb_thread(void *arg)
 {
+	debug("call");
 	struct viomb_softc *sc = arg;
 	int r;
 	struct timeval sleeptime;
@@ -486,20 +582,21 @@ viomb_thread(void *arg)
 			sleeptime.tv_sec = 100;
 		}
 
-	again:
+again:
 		lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
+		debug("lock exlusive");
 
-		if(sc->sc_inflate_done){
+		if(sc->sc_inflate_done == DONE){
 
-			sc->sc_inflate_done = 0;
+			sc->sc_inflate_done = INUSE;
 			lockmgr(&sc->sc_waitlock, LK_RELEASE);
 			inflate_done(sc);
 			goto again;
 		}
 
-		if (sc->sc_deflate_done){
+		if (sc->sc_deflate_done == DONE){
 
-			sc->sc_deflate_done = 0;
+			sc->sc_deflate_done = INUSE;
 			lockmgr(&sc->sc_waitlock, LK_RELEASE);
 			deflate_done(sc);
 			goto again;
@@ -509,6 +606,7 @@ viomb_thread(void *arg)
 		//The process/thread will sleep at most timo / hz seconds
 		cv_timedwait(&sc->sc_wait, &sc->sc_waitlock, tvtohz_low(&sleeptime));
 		lockmgr(&sc->sc_waitlock, LK_RELEASE);
+		debug("lock release");
 	}
 }
 
@@ -519,7 +617,7 @@ viomb_attach(device_t dev)
 	struct viomb_softc *sc = device_get_softc(dev);
 	device_t pdev = device_get_parent(dev);
 	struct virtio_softc *vsc = device_get_softc(pdev);
-	const struct sysctlnode *node;
+	//const struct sysctlnode *node;
 	int r;
 
 	if (vsc->sc_child != NULL) {
@@ -541,7 +639,7 @@ viomb_attach(device_t dev)
 	vsc->sc_vqs = &sc->sc_vq[INFL_VQ]; /* inflate queue */
 	vsc->sc_nvqs = 2; /* no stats queue */
 	vsc->sc_config_change = viomb_config_change;
-	//vsc->sc_intrhand = virtio_vq_intr; by default
+	//vsc->sc_intrhand = virtio_vq_intr; already by default
 
 	virtio_negotiate_features(vsc, VIRTIO_CONFIG_DEVICE_FEATURES);
 
@@ -558,29 +656,14 @@ viomb_attach(device_t dev)
 	viomb_read_config(sc);
 	sc->sc_inflight = 0;
 	TAILQ_INIT(&sc->sc_balloon_pages);
+	debug("tailq_init done");
 
-	r = bus_dmamap_create(vsc->requests_dmat, BUS_DMA_NOWAIT, &sc->sc_req.bl_dmamap);
 
-	if (r != 0 ){
-		debug("dmamap creation failed.\n");
+	if (viomb_alloc_mems(sc))
 		goto err;
-	}
 
-	r = bus_dmamap_load(vsc->requests_dmat,
-			sc->sc_req.bl_dmamap,
-			sc->sc_req.bl_pages[INFL_VQ],
-			sizeof(uint32_t) * PGS_PER_REQ,
-			bl_callback,
-			sc,
-			0);
-
-	if (r != 0 ){
-		debug("dmamap creation failed.\n");
-		goto err;
-	}
-
-	sc->sc_inflate_done = 0;
-	sc->sc_deflate_done = 0;
+	sc->sc_inflate_done = INUSE;
+	sc->sc_deflate_done = INUSE;
 
 	lockinit(&sc->sc_waitlock, "waitlock", 0, 0);
 	cv_init(&sc->sc_wait, "sc_wait");
@@ -599,6 +682,7 @@ viomb_attach(device_t dev)
 	/* add nodes */
 	//sysctl_createv()
 
+	return;
 
 err:
 	debug("attach failure");
@@ -626,7 +710,6 @@ viomb_detach(device_t dev)
 	struct viomb_softc *sc = device_get_softc(dev);
 	device_t pdev = device_get_parent(sc->sc_dev);
 	struct virtio_softc *vsc = device_get_softc(pdev);
-	int i;
 
 	cv_destroy(&sc->sc_wait);
 	lockuninit(&sc->sc_waitlock);
@@ -656,9 +739,7 @@ static int
 vioif_destroy_vq( struct viomb_softc *sc, struct virtio_softc *vsc, int numq){
 
 	struct virtqueue *vq = &vsc->sc_vqs[numq];
-	int i;
 
-	kfree(vq->vq_entries, M_DEVBUF);
 	bus_dmamap_unload(vq->vq_dmat, vq->vq_dmamap);
 	bus_dmamem_free(vq->vq_dmat, vq->vq_vaddr, vq->vq_dmamap);
 	bus_dma_tag_destroy(vq->vq_dmat);

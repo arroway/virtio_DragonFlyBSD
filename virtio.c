@@ -809,19 +809,29 @@ virtio_dequeue(struct virtio_softc *sc, struct virtqueue *vq, int *slotp,
 	if (vq->vq_used_idx == vq->vq_used->idx)
 		return ENOENT;
 	spin_lock(&vq->vq_uring_lock);
+	debug("1");
 	usedidx = vq->vq_used_idx++;
+	debug("2");
 	spin_unlock(&vq->vq_uring_lock);
+	debug("3");
 	usedidx %= vq->vq_num;
+	debug("4");
 	slot = vq->vq_used->ring[usedidx].id;
+	debug("5");
 	qe = &vq->vq_entries[slot];
+	debug("6");
 
 	if (qe->qe_indirect)
 		vq_sync_indirect(sc, vq, slot, BUS_DMASYNC_POSTWRITE);
 
 	if (slotp)
 		*slotp = slot;
+	debug("7");
+
 	if (lenp)
 		*lenp = vq->vq_used->ring[usedidx].len;
+
+	debug("8");
 
 	return 0;
 }
@@ -1008,15 +1018,17 @@ virtio_attach(device_t dev)
 
 	}
 
-	if (virtio_type == PCI_PRODUCT_VIRTIO_NETWORK) {
+	if (virtio_type == PCI_PRODUCT_VIRTIO_NETWORK){
 		child = device_add_child(dev, "virtio_net",0);
-	} else if (virtio_type == PCI_PRODUCT_VIRTIO_BLOCK) {
+
+	} else if (virtio_type == PCI_PRODUCT_VIRTIO_BLOCK){
 		child = device_add_child(dev, "virtio_blk",0);
-	} else if (virtio_type == PCI_PRODUCT_VIRTIO_BALLOON){
+
+	}else if (virtio_type == PCI_PRODUCT_VIRTIO_BALLOON){
 		child = device_add_child(dev, "virtio_mb", 0);
+
 	} else {
-		kprintf("Dev %s not supported\n",
-			virtio_device_name[virtio_type]); 
+		kprintf("Dev %s not supported\n", virtio_device_name[virtio_type]);
 		goto handle_error;
 	}
 	return 0;
