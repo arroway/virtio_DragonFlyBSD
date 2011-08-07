@@ -164,6 +164,7 @@ bl_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int error)
 	return;
 }
 
+
 static int
 viomb_alloc_mems(struct viomb_softc *sc)
 {
@@ -240,7 +241,6 @@ viomb_alloc_mems(struct viomb_softc *sc)
 
 
 static int
-//viomb_match(device_t dev, struct cfdata_t match , void *aux){
 viomb_probe(device_t dev)
 {
 
@@ -305,10 +305,13 @@ viomb_config_change(struct virtio_softc *vsc)
 
 
 /*
- * Inflate: consume some amount of physical memory.
+ * The hypervisor requests an amount of memory to the guest OS. If the guest
+ * cannot find this requested amount of memory, then it will try again later on.
+ * (nota: in this case, make him allocate as much memory as possible all the same.)
+ *
+ * The memory of the balloon will not be accessible by the guest OS then.
  */
 
-/* called from viomb thread */
 static int
 inflate(struct viomb_softc *sc)
 {
@@ -376,7 +379,7 @@ inflate(struct viomb_softc *sc)
 	return 0;
 }
 
-
+/* Interrupt */
 static int
 inflateq_done(struct virtqueue *vq)
 {
@@ -434,7 +437,10 @@ inflate_done(struct viomb_softc *sc)
 
 
 /*
- * Deflate: free previously allocated memory.
+ * When memory on the balloon is available again, the hypervisor returns it back to the
+ * operating OS. The guest OS deflates the balloon. The memory becomes accessible again
+ * by the guest OS to be allocated as needed.
+ *
  */
 static int
 deflate(struct viomb_softc *sc)
@@ -494,7 +500,7 @@ deflate(struct viomb_softc *sc)
 
 }
 
-
+/* Interrupt */
 static int
 deflateq_done(struct virtqueue *vq)
 {
@@ -552,9 +558,10 @@ deflate_done(struct viomb_softc *sc)
 }
 
 
-/*
- * Kthread: sleeps, eventually inflate and deflate.
- * values of sleeptime ?
+/* The hypervisor may want the guest operating system to return some amount of
+ * memory back. The balloon driver is waiting for the request of the hypervisor in
+ * the viomb_thread.
+ *
  */
 static void
 viomb_thread(void *arg)
@@ -569,6 +576,9 @@ viomb_thread(void *arg)
 	while(1){
 
 		sleeptime.tv_sec = 30000;
+
+		/* The hypervisor requests some amount of memory. We inflate a balloon of
+		 *  memory inside the guest OS. */
 		if (sc->sc_npages > sc->sc_actual + sc->sc_inflight){
 
 			if (sc->sc_inflight == 0) {
@@ -579,6 +589,9 @@ viomb_thread(void *arg)
 					sleeptime.tv_sec = 1000;
 			} else
 				sleeptime.tv_sec = 100;
+
+		/* Memory in the balloon has become available. The hypervisor can return
+		 * the memory to the guest OS. We deflate the balloon of memory.*/
 		} else if (sc->sc_npages < sc->sc_actual + sc->sc_inflight) {
 			if (sc->sc_inflight == 0)
 				r = deflate(sc);
