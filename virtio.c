@@ -961,7 +961,7 @@ virtio_attach(device_t dev)
 	int rid, error;
 	device_t child;
 	sc->dev = dev;
-	int virtio_type;
+	unsigned int virtio_type;
 	rid = PCIR_BAR(0);
 	sc->io = bus_alloc_resource(dev, SYS_RES_IOPORT, &rid, 0, ~0, 1,
 				    RF_ACTIVE);
@@ -1024,7 +1024,7 @@ virtio_attach(device_t dev)
 	} else if (virtio_type == PCI_PRODUCT_VIRTIO_BLOCK){
 		child = device_add_child(dev, "virtio_blk",0);
 
-	}else if (virtio_type == PCI_PRODUCT_VIRTIO_BALLOON){
+	} else if (virtio_type == PCI_PRODUCT_VIRTIO_BALLOON){
 		child = device_add_child(dev, "virtio_mb", 0);
 
 	} else {

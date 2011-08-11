@@ -119,7 +119,7 @@ struct viomb_softc {
 	int 				sc_nseg_temp;
 	bus_dma_segment_t	*sc_segment_temp;
 
-};f
+};
 
 
 static int	balloon_initialized = 0; /* multiple balloon is not allowed */
@@ -127,7 +127,7 @@ static int	balloon_initialized = 0; /* multiple balloon is not allowed */
 
 /* prototypes */
 static int	viomb_probe(device_t);
-static void	viomb_attach(device_t);
+static int	viomb_attach(device_t);
 static void viomb_detach(device_t);
 static int vioif_destroy_vq(struct viomb_softc *, struct virtio_softc *, int);
 static void	viomb_read_config(struct viomb_softc *);
@@ -159,10 +159,10 @@ bl_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int error)
 	}
 
 	sc->sc_nseg_temp = nseg;
-	for(i=0; i< nseg; i++)
+	for(i=0; i< nseg; i++){
 		sc->sc_segment_temp[i] = segs[i];
-		debug("seg %d len:%08X, sc->sc_segment_temp[i].ds_len: %08X ", i, segs[i].ds_len, sc->sc_segment_temp[i].ds_len);
-
+		debug("seg %d len:%d, sc->sc_segment_temp[i].ds_len: %d ", i, segs[i].ds_len, sc->sc_segment_temp[i].ds_len);
+	}
 
 
 	return;
@@ -270,16 +270,16 @@ viomb_read_config(struct viomb_softc *sc)
 	/* these values are explicitly specified as little-endian */
 	reg = virtio_read_device_config_4(sc->sc_virtio,
 			VIRTIO_BALLOON_CONFIG_NUM_PAGES);
-	//sc->sc_npages = le32toh(reg);
+	sc->sc_npages = le32toh(reg);
 	//sc_npages
 	reg = virtio_read_device_config_4(sc->sc_virtio,
 			VIRTIO_BALLOON_CONFIG_ACTUAL);
-	//sc->sc_actual = le32toh(reg);
+	sc->sc_actual = le32toh(reg);
 }
 
 
 /*
- * Config change callback: wakeup the kthread.
+ * Config change callback.
  */
 static int
 viomb_config_change(struct virtio_softc *vsc)
@@ -291,7 +291,6 @@ viomb_config_change(struct virtio_softc *vsc)
 	old = sc->sc_npages;
 	viomb_read_config(sc);
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
-	//cv_signal(&sc->sc_wait);
 	wakeup(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
 	debug("lock release");
@@ -391,7 +390,6 @@ inflateq_done(struct virtqueue *vq)
 
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
 	sc->sc_inflate_done = DONE;
-	//cv_signal(&sc->sc_wait);
 	wakeup(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
 	debug("lock_release");
@@ -512,7 +510,6 @@ deflateq_done(struct virtqueue *vq)
 
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
 	sc->sc_deflate_done = DONE;
-	//cv_signal(&sc->sc_wait);
 	wakeup(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
 
@@ -622,15 +619,16 @@ again:
 
 		//mstohz function: milliseconds to clock ticks
 		//The process/thread will sleep at most timo / hz seconds
-		//cv_timedwait(&sc->sc_wait, &sc->sc_waitlock, tvtohz_low(&sleeptime));
-		lksleep(&sc->sc_wait, &sc->sc_waitlock, PCATCH, "lksleep mesg", tvtohz_low(&sleeptime));
+		debug("SLEEP");
+		lksleep(&sc->sc_wait, &sc->sc_waitlock, 0, "lksleep mesg", tvtohz_low(&sleeptime));
+		debug("AWAKE");
 		lockmgr(&sc->sc_waitlock, LK_RELEASE);
 		debug("lock release");
 	}
 }
 
 
-static void
+static int
 viomb_attach(device_t dev)
 {
 	struct viomb_softc *sc = device_get_softc(dev);
@@ -641,7 +639,7 @@ viomb_attach(device_t dev)
 	if (vsc->sc_child != NULL) {
 		debug("child already attached for "
 			"something wrong...\n");
-		return;
+		return 1;
 	}
 
 	if (balloon_initialized++) {
@@ -677,14 +675,16 @@ viomb_attach(device_t dev)
 	debug("tailq_init done");
 
 
-	if (viomb_alloc_mems(sc))
+	if (viomb_alloc_mems(sc)){
+		debug("viomb_alloc_mems failed.");
 		goto err;
+	}
 
 	sc->sc_inflate_done = INUSE;
 	sc->sc_deflate_done = INUSE;
 
-	lockinit(&sc->sc_waitlock, "waitlock", 0, 0);
-	cv_init(&sc->sc_wait, "sc_wait");
+	lockinit(&sc->sc_waitlock, "waitlock", 0, LK_CANRECURSE);
+	//cv_init(&sc->sc_wait, "sc_wait");
 
 	r = lwkt_create(viomb_thread,
 			sc->sc_dev,
@@ -720,6 +720,9 @@ viomb_attach(device_t dev)
 	SYSCTL_INT(_hw_viomb, OID_AUTO, sc->sc_actual, CTLFLAG_RW, &sc->sc_actual, 0,
 				"Virtio Balloon actual value"); */
 
+	return 0;
+
+
 err:
 	debug("attach failure");
 	if (vsc->sc_nvqs == 2){
@@ -734,7 +737,7 @@ err:
 		vsc->sc_nvqs = 0;
 	}
 	vsc->sc_child = (void*)1;
-	return ;
+	return 1;
 }
 
 
