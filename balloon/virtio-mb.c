@@ -60,6 +60,7 @@
 #include <sys/kernel.h>
 #include <sys/_timeval.h>
 #include <sys/time.h>
+#include <sys/sysctl.h>
 
 
 #include "virtiovar.h"
@@ -118,10 +119,13 @@ struct viomb_softc {
 	int 				sc_nseg_temp;
 	bus_dma_segment_t	*sc_segment_temp;
 
-};
+};f
+
 
 static int	balloon_initialized = 0; /* multiple balloon is not allowed */
 
+
+/* prototypes */
 static int	viomb_probe(device_t);
 static void	viomb_attach(device_t);
 static void viomb_detach(device_t);
@@ -136,8 +140,8 @@ static int	deflate(struct viomb_softc *);
 static int	deflateq_done(struct virtqueue *);
 static int	deflate_done(struct viomb_softc *);
 static void	viomb_thread(void *);
+static void bl_callback(void *, bus_dma_segment_t *, int, int);
 
-//CFATTACH_DECL_NEW(viomb, sizeof(struct viomb_softc), viomb_match, viomb_attach, NULL, NULL);
 
 static void
 bl_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int error)
@@ -266,13 +270,11 @@ viomb_read_config(struct viomb_softc *sc)
 	/* these values are explicitly specified as little-endian */
 	reg = virtio_read_device_config_4(sc->sc_virtio,
 			VIRTIO_BALLOON_CONFIG_NUM_PAGES);
-	sc->sc_npages = le32toh(reg);
-
+	//sc->sc_npages = le32toh(reg);
+	//sc_npages
 	reg = virtio_read_device_config_4(sc->sc_virtio,
 			VIRTIO_BALLOON_CONFIG_ACTUAL);
-	debug("2nd virtio_read_device_config_4 is ok");
-	sc->sc_actual = le32toh(reg);
-	debug("affectation is okay");
+	//sc->sc_actual = le32toh(reg);
 }
 
 
@@ -634,7 +636,6 @@ viomb_attach(device_t dev)
 	struct viomb_softc *sc = device_get_softc(dev);
 	device_t pdev = device_get_parent(dev);
 	struct virtio_softc *vsc = device_get_softc(pdev);
-	//const struct sysctlnode *node;
 	int r;
 
 	if (vsc->sc_child != NULL) {
@@ -696,10 +697,28 @@ viomb_attach(device_t dev)
 		goto err;
 	}
 
-	/* add nodes */
-	//sysctl_createv()
 
-	return;
+	/* add sysctl variables - automatically destroyed
+	 *  when the module is unloaded */
+
+/*	SYSCTL_NODE(_hw,
+			OID_AUTO,
+			viomb,
+			CTLFLAG_RD,
+			0,
+			"Virtio balloon driver status");
+	TUNABLE_INT("hw.viomb.npages",
+			&sc->sc_npages);
+	SYSCTL_INT(_hw_viomb,
+			OID_AUTO,
+			&sc->sc_npages,
+			CTLFLAG_RW,
+			&sc->sc_npages,
+			0,
+			"Virtio Balloon npages value");
+	TUNABLE_INT("hw.viomb.actual", &sc->sc_actual);
+	SYSCTL_INT(_hw_viomb, OID_AUTO, sc->sc_actual, CTLFLAG_RW, &sc->sc_actual, 0,
+				"Virtio Balloon actual value"); */
 
 err:
 	debug("attach failure");
@@ -742,11 +761,6 @@ viomb_detach(device_t dev)
 	vioif_destroy_vq(sc, vsc, INFL_VQ); /* destroy inflate vq */
 	vioif_destroy_vq(sc, vsc, DEFL_VQ); /* destroy deflate vq */
 
-
-
-
-	/* destroy nodes */
-	//sysctl_destroyv;
 	return;
 }
 
