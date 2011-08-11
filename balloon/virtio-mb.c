@@ -334,9 +334,9 @@ inflate(struct viomb_softc *sc)
 
 	b = &sc->sc_req;
 
-	r = contigmalloc(nhpages*PAGE_SIZE, M_DEVBUF, M_ZERO, 0, UINT32_MAX*PAGE_SIZE, PAGE_SIZE, 0);
+	r = contigmalloc(nhpages*PAGE_SIZE, M_DEVBUF, M_WAITOK | M_ZERO, 0, UINT32_MAX*PAGE_SIZE, PAGE_SIZE, 0);
 
-	if (r != NULL){
+	if (r == NULL){
 		debug("%llu pages of physical memory "
 		       "could not be allocated, retrying...\n", nhpages);
 		return 1;	/* sleep longer */
