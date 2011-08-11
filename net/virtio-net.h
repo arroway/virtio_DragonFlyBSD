@@ -267,9 +267,13 @@ struct vioif_softc {
 	bus_dma_segment_t 	**sc_tx_segment;
 	struct mbuf			**sc_tx_mbufs;
 
-	enum  {
+	volatile enum  {
 		ISFREE, INUSE, DONE
 	} sc_ctrl_inuse;
+
+	volatile enum  {
+		SLEEP, AWAKE
+	} sc_run;
 
 	struct cv 				sc_ctrl_wait;
 	struct lock 			sc_ctrl_wait_lock;
@@ -283,9 +287,14 @@ struct vioif_softc {
 	struct lock 		sc_lock;
 	struct thread 		*sc_rx_td;
 	struct thread		*sc_promisc_td;
-	int 				sc_run;
-	int 				sc_init;
+	int 				sc_init; /* deferred_init job is done*/
 	lwkt_msg 			sc_msg;
+
+	struct thread 		*sc_ctrl_done;
+	struct lock			sc_done;
+	int 				sc_ident;
+
+	struct spinlock		mtx;
 
 };
 
