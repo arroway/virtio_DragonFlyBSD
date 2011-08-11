@@ -1851,7 +1851,7 @@ vioif_attach(device_t dev)
 						     sc->sc_mac[5]);
 		}
 
-	kprintf(":Ethernet address %d\n", ether_sprintf(sc->sc_mac));
+	//kprintf(":Ethernet address %d\n", ether_sprintf(sc->sc_mac));
 
 	kprintf("Attach started ->> %s\n",__FUNCTION__);
 
@@ -1909,6 +1909,8 @@ vioif_attach(device_t dev)
 
 	/* Initialize the lock to deal with interrupts for ctrl packets
 	 * - allow recursive locks */
+
+	lockinit(&sc->sc_ctrl_wait_done, "ctrl lock", 0, LK_CANRECURSE);
 
 	/* Initialize the lock to deal with interrupts for the rx packets
 	 *  - allow recursive locks */
@@ -1984,7 +1986,6 @@ vioif_attach(device_t dev)
 		debug("Creation of vioif_set_ctrl_done thread failed\n");
 		goto err;
 	}*/
-
 
 	/* put at the end of the attach routine, so it doesn't block its execution*/
 	if (vsc->sc_nvqs == 3){
