@@ -1099,13 +1099,9 @@ vioif_rx_vq_done(struct virtqueue *vq)
 	struct virtio_softc *vsc = vq->vq_owner;
 	struct vioif_softc *sc = device_get_softc(vsc->sc_child);
 	int r = 0;
-	//struct lwkt_port rep_port;
-
-	//lwkt_initmsg(&sc->sc_lmsg, &sc->sc_port, 0);
 
 	r = vioif_rx_deq(sc);
 	if (r && sc->sc_init){
-		//lwkt_sendmsg(&sc->sc_port, &sc->sc_lmsg);
 		lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
 		sc->sc_run = AWAKE;
 		lockmgr(&sc->sc_lock, LK_RELEASE);
@@ -1125,8 +1121,6 @@ vioif_rx_thread(void *arg)
 	device_t dev = arg;
 	struct vioif_softc *sc = device_get_softc(dev);
 
-	//lwkt_initport_thread(&sc->sc_port, curthread);
-
 	/*lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
 	sc->sc_run = 1;
 	wakeup(sc->sc_rx_td);
@@ -1136,8 +1130,6 @@ vioif_rx_thread(void *arg)
 		debug("SLEEP");
 		lksleep(&sc->sc_rx_td, &sc->sc_lock, 0, "msg", 0);
 		debug("OUT OF SLEEP");
-		//sc->sc_lmsg = *(lwkt_msg_t)lwkt_waitport(&sc->sc_port, 0); /* ? */
-		//lwkt_replymsg(&sc->sc_lmsg, 0);
 	}
 
 	//debug("thread awaken");
@@ -1391,9 +1383,6 @@ vioif_deferred_init(device_t dev)
 	struct vioif_softc *sc = device_get_softc(dev);
 	//debug("call");
 
-	//lwkt_initmsg(&sc->sc_lmsg, &sc->sc_port, 0);
-	//lwkt_sendmsg(&sc->sc_port, &sc->sc_lmsg);
-
 	wakeup(sc);
 	//debug("out");
 	/*r =  vioif_set_promisc(sc, false);
@@ -1417,25 +1406,13 @@ vioif_set_promisc_init(void *arg)
 	debug("call");
 	KKASSERT(sc != NULL);
 
-	debug("wakeup(curthread)");
+	/* Let _attach know that we are ready */
 	wakeup(curthread);
 
-	//lwkt_initport_thread(&sc->sc_port, curthread);
-
-	//stupid
-	/*lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
-	if (sc->sc_init == 1);
-		wakeup(sc->sc_promisc_td);
-	lockmgr(&sc->sc_lock, LK_RELEASE);*/
-
-
-//	debug("before lwkt_waitport\n");
-	//sc->sc_msg = *(lwkt_msg_t)lwkt_waitport(&sc->sc_port, 0); /* ? */
-	//debug("after lwkt_waitport\n");
+	/* and now sleep until we are supposed to the the promisc init */
 	tsleep(sc, 0, "virtpromisc", 0);
-	debug("after tsleep(sc)");
+
 	r = vioif_ctrl_rx(sc, VIRTIO_NET_CTRL_RX_PROMISC, false);
-	//debug("after vioif_ctrl_rx\n");
 
 	if (r != 0)
 		debug("resetting promisc mode failed, "
@@ -1443,11 +1420,9 @@ vioif_set_promisc_init(void *arg)
 	else
 		ifp->if_flags &= ~IFF_PROMISC;
 
-	//lwkt_replymsg(&sc->sc_lmsg, 0);
 	sc->sc_init = 1; /* the job of deferred init is done; we can execute others interrupts*/
-	//debug("out");
 
-	return;
+	lwkt_exit();
 }
 
 static int
@@ -2051,7 +2026,6 @@ vioif_detach(device_t dev)
 	cv_destroy(&sc->sc_ctrl_wait);
 	lockuninit(&sc->sc_ctrl_wait_lock);
 	//spin_uninit(&sc->mtx);
-	//lwkt_serialize_exit(&sc->sc_serializer);
 
 	vioif_destroy_vq(sc, vsc, RX_VQ, false); /* destroy rx vq */
 	vioif_destroy_vq(sc, vsc, TX_VQ, false); /* destroy tx vq */
