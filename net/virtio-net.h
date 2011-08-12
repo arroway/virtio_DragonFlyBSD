@@ -63,8 +63,8 @@
 #ifndef _VIRTIONET_H_
 #define _VIRTIONET_H_
 
-#include "virtiovar.h"
-#include "virtioreg.h"
+#include <dev/virtio/virtiovar.h>
+#include <dev/virtio/virtioreg.h>
 
 /*
  * if_vioifreg.h:

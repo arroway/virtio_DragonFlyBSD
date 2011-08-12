@@ -42,8 +42,8 @@
 #include <bus/pci/pcivar.h>
 #include <bus/pci/pcireg.h>
 
-#include "virtiovar.h"
-#include "virtioreg.h"
+#include <dev/virtio/virtiovar.h>
+#include <dev/virtio/virtioreg.h>
 
 static const char *virtio_device_name[] = {
 	"Unknown (0)",	/* 0 */

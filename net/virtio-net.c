@@ -72,9 +72,9 @@
 #include <cpu/i386/include/cpufunc.h>
 
 
-#include "virtiovar.h"
-#include "virtioreg.h"
-#include "virtio-net.h"
+#include <dev/virtio/virtiovar.h>
+#include <dev/virtio/virtioreg.h>
+#include <dev/virtio/net/virtio-net.h>
 
 //#define ether_sprintf(x) "<dummy>"
 
@@ -602,7 +602,7 @@ vioif_alloc_mems(struct vioif_softc *sc)
 	//debug("call");
 	struct virtio_softc *vsc = sc->sc_virtio;
 	int allocsize, allocsize2, r, i;
-	void *vaddr __attribute__((uninitialized));
+	void *vaddr;
 	intptr_t p;
 	int rxqsize, txqsize;
 
@@ -1252,7 +1252,7 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	struct virtio_softc *vsc = sc->sc_virtio;
 	struct virtqueue *vq = &sc->sc_vq[CTRL_VQ];
-	int r, slot, i;
+	int r, slot;
 
 	if (vsc->sc_nvqs < 3)
 		return ENOTSUP;
@@ -1397,9 +1397,10 @@ vioif_deferred_init(device_t dev)
 	struct vioif_softc *sc = device_get_softc(dev);
 	//debug("call");
 
-	lwkt_initmsg(&sc->sc_lmsg, &sc->sc_port, 0);
-	lwkt_sendmsg(&sc->sc_port, &sc->sc_lmsg);
+	//lwkt_initmsg(&sc->sc_lmsg, &sc->sc_port, 0);
+	//lwkt_sendmsg(&sc->sc_port, &sc->sc_lmsg);
 
+	wakeup(sc);
 	//debug("out");
 	/*r =  vioif_set_promisc(sc, false);
 
@@ -1420,7 +1421,12 @@ vioif_set_promisc_init(void *arg)
 	int r;
 
 	debug("call");
-	lwkt_initport_thread(&sc->sc_port, curthread);
+	KKASSERT(sc != NULL);
+
+	debug("wakeup(curthread)");
+	wakeup(curthread);
+
+	//lwkt_initport_thread(&sc->sc_port, curthread);
 
 	//stupid
 	/*lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
@@ -1430,8 +1436,10 @@ vioif_set_promisc_init(void *arg)
 
 
 //	debug("before lwkt_waitport\n");
-	sc->sc_msg = *(lwkt_msg_t)lwkt_waitport(&sc->sc_port, 0); /* ? */
+	//sc->sc_msg = *(lwkt_msg_t)lwkt_waitport(&sc->sc_port, 0); /* ? */
 	//debug("after lwkt_waitport\n");
+	tsleep(sc, 0, "virtpromisc", 0);
+	debug("after tsleep(sc)");
 	r = vioif_ctrl_rx(sc, VIRTIO_NET_CTRL_RX_PROMISC, false);
 	//debug("after vioif_ctrl_rx\n");
 
@@ -1441,7 +1449,7 @@ vioif_set_promisc_init(void *arg)
 	else
 		ifp->if_flags &= ~IFF_PROMISC;
 
-	lwkt_replymsg(&sc->sc_lmsg, 0);
+	//lwkt_replymsg(&sc->sc_lmsg, 0);
 	sc->sc_init = 1; /* the job of deferred init is done; we can execute others interrupts*/
 	//debug("out");
 
@@ -1650,7 +1658,8 @@ vioif_rx_filter(struct vioif_softc *sc)
 				ifma,
 				ETHER_ADDR_LEN);
 		//ETHER_NEXT_MULTI(step, enm);
-		TAILQ_NEXT(ifma, ifma_link);
+		//XXX: what is this? this does nothing!
+		ifma = TAILQ_NEXT(ifma, ifma_link);
 		debug("out while");
 
 	}
@@ -1910,7 +1919,7 @@ vioif_attach(device_t dev)
 	/* Initialize the lock to deal with interrupts for ctrl packets
 	 * - allow recursive locks */
 
-	lockinit(&sc->sc_ctrl_wait_done, "ctrl lock", 0, LK_CANRECURSE);
+	lockinit(&sc->sc_ctrl_wait_lock, "ctrl lock", 0, LK_CANRECURSE);
 
 	/* Initialize the lock to deal with interrupts for the rx packets
 	 *  - allow recursive locks */
@@ -2001,6 +2010,10 @@ vioif_attach(device_t dev)
 			debug("Creation of vioif_set_promisc_init thread failed\n");
 			goto err;
 		}
+
+		debug("before tsleep(sc_promisc_td)");
+		tsleep(sc->sc_promisc_td, 0, "sc_promisc_td", 0);
+		debug("after tsleep(sc_promisc_td)");
 
 		vioif_deferred_init(dev);
 	}
