@@ -361,8 +361,7 @@ vioif_start(struct ifnet *ifp)
 
 	queued = 0;
 
-	m = ifq_poll(&ifp->if_snd);
-	while (m != NULL){
+	while ((m = ifq_poll(&ifp->if_snd)) != NULL) {
 
 		r = virtio_enqueue_prep(vsc, vq, &slot);
 
@@ -458,7 +457,7 @@ vioif_start(struct ifnet *ifp)
 
 /* 	ifp->if_ioctl  */
 static int
-vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t caddr, struct ucred *data)
+vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data, struct ucred *cr)
 {
 	struct vioif_softc *sc = ifp->if_softc;
 	int r = 0;
@@ -481,7 +480,7 @@ vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t caddr, struct ucred *data)
 		break;
 
 	default:
-		r = ether_ioctl(ifp, cmd, (caddr_t)data);
+		r = ether_ioctl(ifp, cmd, data);
 	}
 
 	return r;
