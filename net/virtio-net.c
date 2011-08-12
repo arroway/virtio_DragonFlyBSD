@@ -103,7 +103,8 @@ static void	vioif_free_rx_mbuf(struct vioif_softc *, int);
 static void	vioif_populate_rx_mbufs(struct vioif_softc *);
 static int	vioif_rx_deq(struct vioif_softc *);
 static int	vioif_rx_vq_done(struct virtqueue *);
-static void	vioif_rx_thread(void *);
+//static void	vioif_rx_thread(void *);
+static void vioif_rx_task(void *, int);
 static void	vioif_rx_drain(struct vioif_softc *);
 
 /* tx */
@@ -460,6 +461,7 @@ vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t caddr ,struct ucred *data)
 
 	case SIOCSIFFLAGS:
 		if (ifp->if_flags & IFF_RUNNING)
+			//taskqueue_enqueue ?
 			r = vioif_rx_filter(sc);
 		else
 			r = 0;
@@ -1087,10 +1089,10 @@ vioif_rx_deq(struct vioif_softc *sc)
 }
 
 
-/* lwkt_msg is used to "pock" vioif_rx_thread and tell it
- * to execute vioif_populate_rx_mbuf
- * --> using sleep/wakeup functions instead now
- * */
+/*
+ * rx interrupt
+ *
+ */
 
 static int
 vioif_rx_vq_done(struct virtqueue *vq)
@@ -1101,7 +1103,10 @@ vioif_rx_vq_done(struct virtqueue *vq)
 	int r = 0;
 
 	r = vioif_rx_deq(sc);
-	if (r && sc->sc_init){
+
+	taskqueue_enqueue(sc->sc_rx_tq, &sc->sc_rxtask);
+
+	/*if (r && sc->sc_init){
 		lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
 		sc->sc_run = AWAKE;
 		lockmgr(&sc->sc_lock, LK_RELEASE);
@@ -1109,22 +1114,33 @@ vioif_rx_vq_done(struct virtqueue *vq)
 		wakeup(sc->sc_rx_td);
 		//debug("awake sc_rx_td");
 
-	}
+	}*/
 
 	return r;
 }
 
+
 static void
+vioif_rx_task(void *arg, int pending)
+{
+	device_t dev = arg;
+	struct vioif_softc *sc = device_get_softc(dev);
+
+	vioif_populate_rx_mbufs(sc);
+
+}
+
+/*static void
 vioif_rx_thread(void *arg)
 {
 	debug("call");
 	device_t dev = arg;
 	struct vioif_softc *sc = device_get_softc(dev);
 
-	/*lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
-	sc->sc_run = 1;
-	wakeup(sc->sc_rx_td);
-	lockmgr(&sc->sc_lock, LK_RELEASE);*/
+	//lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
+	//sc->sc_run = 1;
+	//wakeup(sc->sc_rx_td);
+	//lockmgr(&sc->sc_lock, LK_RELEASE);
 
 	while(sc->sc_run){
 		debug("SLEEP");
@@ -1143,7 +1159,7 @@ vioif_rx_thread(void *arg)
 	wakeup(&sc->sc_rx_td);
 	//debug("after wakeup");
 
-}
+}*/
 
 /* vioif_rx_drain() frees all the mbufs, and is called from if_stop(disable) */
 
@@ -1891,11 +1907,12 @@ vioif_attach(device_t dev)
 	 *  - allow recursive locks */
 	lockinit(&sc->sc_lock, "vioif lock", 0, LK_CANRECURSE);
 
-	sc->sc_run = SLEEP; 	/* the thread sc_rx_td will go to sleep */
-	sc->sc_init = 0; /* deferred_init is not executed yet ; rx interrupt won't execute yet ?*/
+	//sc->sc_run = SLEEP; 	/* the thread sc_rx_td will go to sleep */
+	//sc->sc_init = 0; /* deferred_init is not executed yet ; rx interrupt won't execute yet ?*/
+
 
 	/* This creates a thread to deal with rx requests.*/
-	error = lwkt_create(vioif_rx_thread,
+	/*error = lwkt_create(vioif_rx_thread,
 			sc->dev,
 			&sc->sc_rx_td,
 			NULL, 0, 0,
@@ -1904,7 +1921,7 @@ vioif_attach(device_t dev)
 	if (error){
 		debug("Creation of vioif_rx_thread failed\n");
 		goto err;
-	}
+	}*/
 
 //make it sleep later
 /*	lockmgr(&sc->sc_lock, LK_EXCLUSIVE);
@@ -1915,9 +1932,10 @@ vioif_attach(device_t dev)
 	lockmgr(&sc->sc_lock, LK_RELEASE);*/
 
 
+
 	/* Memory allocation for the control queue (for virtio_softc) */
 	if (vioif_alloc_mems(sc) < 0){
-		//debug("vioif_alloc_mems(sc) failed !\n");
+		debug("vioif_alloc_mems(sc) failed !\n");
 		goto err;
 	}
 
@@ -1943,6 +1961,23 @@ vioif_attach(device_t dev)
 
 	ether_ifattach(ifp, sc->sc_mac, &sc->sc_serializer);
 	debug("ether_ifattach");
+
+
+	/* create a taskqueue for rx*/
+	sc->sc_rx_tq = taskqueue_create("rx_taskq", M_INTWAIT,
+			taskqueue_thread_enqueue, &sc->sc_rx_tq);
+
+	if (sc->sc_rx_tq == NULL){
+		debug("could not create taskqueue");
+		ether_ifdetach(ifp);
+		goto err;
+	}
+
+	/* create one thread */
+	taskqueue_start_threads(&sc->sc_rx_tq, 1, TDPRI_KERN_DAEMON, -1, "%s taskq", ifp->if_xname);
+
+	/* create rx task structure */
+	TASK_INIT(&sc->sc_rxtask, 0, vioif_rx_task, sc);
 
 
 	/* spinlock used in vioif_ioctl*/
@@ -1979,6 +2014,9 @@ vioif_attach(device_t dev)
 
 		if (error){
 			debug("Creation of vioif_set_promisc_init thread failed\n");
+			taskqueue_free(sc->sc_rx_tq);
+			sc->sc_rx_tq = NULL;
+			ether_ifdetach(ifp);
 			goto err;
 		}
 
@@ -2020,6 +2058,9 @@ vioif_detach(device_t dev)
 	struct ifnet *ifp = &sc->sc_arpcom.ac_if;
 	struct virtio_softc *vsc = device_get_softc(pdev);
 	//struct virtqueue *vq = &vsc->sc_vqs[RX_VQ];
+
+	taskqueue_drain(sc->sc_rx_tq, &sc->sc_rxtask);
+	taskqueue_free(sc->sc_rx_tq);
 
 	ether_ifdetach(ifp);
 

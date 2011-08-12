@@ -280,12 +280,14 @@ struct vioif_softc {
 	struct lwkt_serialize 	sc_serializer;
 	struct spinlock			lock_io;
 
+	struct taskqueue 	*sc_rx_tq;
+	struct task			sc_rxtask; /* rx intr processing */
 
 	/* LWKT messages*/
 	struct lwkt_msg		sc_lmsg;
 	struct lwkt_port 	sc_port;
 	struct lock 		sc_lock;
-	struct thread 		*sc_rx_td;
+
 	struct thread		*sc_promisc_td;
 	int 				sc_init; /* deferred_init job is done*/
 	lwkt_msg 			sc_msg;
@@ -295,6 +297,11 @@ struct vioif_softc {
 	int 				sc_ident;
 
 	struct spinlock		mtx;
+
+
+
+
+
 
 };
 
