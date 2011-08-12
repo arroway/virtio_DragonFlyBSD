@@ -1965,7 +1965,7 @@ vioif_attach(device_t dev)
 	ifq_set_maxlen(&ifp->if_snd, 1);
 	ifq_set_ready(&ifp->if_snd);
 
-	ether_ifattach(ifp, sc->sc_mac, NULL);
+	ether_ifattach(ifp, sc->sc_mac, &sc->sc_serializer);
 	debug("ether_ifattach");
 
 
@@ -1978,6 +1978,7 @@ vioif_attach(device_t dev)
 	//kprintf("%s","CONFIG_DEVICE_STATUS_DRIVER");
 	virtio_set_status(vsc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK);
 
+	lwkt_serialize_exit(&sc->sc_serializer);
 	/*vioif_ctrl_vq_done*/
 	/*error =  lwkt_create(vioif_set_ctrl_done,
 			sc->dev,
@@ -2040,8 +2041,11 @@ vioif_detach(device_t dev)
 	kprintf("%s\n",__FUNCTION__);
 	struct vioif_softc *sc = device_get_softc(dev);
 	device_t pdev = device_get_parent(sc->dev);
+	struct ifnet *ifp = &sc->sc_arpcom.ac_if;
 	struct virtio_softc *vsc = device_get_softc(pdev);
 	//struct virtqueue *vq = &vsc->sc_vqs[RX_VQ];
+
+	ether_ifdetach(ifp);
 
 	cv_destroy(&sc->sc_ctrl_wait);
 	lockuninit(&sc->sc_ctrl_wait_lock);
