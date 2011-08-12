@@ -60,6 +60,7 @@
 #include <net/ifq_var.h>
 #include <net/if_arp.h>
 #include <net/if_var.h>
+#include <net/if_types.h>
 
 #include <sys/spinlock.h>
 #include <sys/spinlock2.h>
@@ -71,7 +72,6 @@
 #include <vm/vm_extern.h>
 #include <cpu/i386/include/cpufunc.h>
 #include <cpu/i386/include/atomic.h>
-
 
 #include <dev/virtio/virtiovar.h>
 #include <dev/virtio/virtioreg.h>
@@ -457,7 +457,7 @@ vioif_start(struct ifnet *ifp)
 
 /* 	ifp->if_ioctl  */
 static int
-vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t caddr ,struct ucred *data)
+vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t caddr, struct ucred *data)
 {
 	struct vioif_softc *sc = ifp->if_softc;
 	int r = 0;
@@ -1963,14 +1963,15 @@ vioif_attach(device_t dev)
 	kprintf("\ndevice name %s\n", device_get_name(dev));
 	if_initname(ifp, device_get_name(dev), device_get_unit(dev));
 
-	ifp->if_softc = vsc;
+	ifp->if_softc = sc;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	ifp->if_start = vioif_start;
 	ifp->if_ioctl = vioif_ioctl;
 	ifp->if_init = vioif_init;
 	ifp->if_mtu  = ETHERMTU;
-
-	//ifp->if_capabilities = 0; // not needed
+	ifp->if_type = IFT_ETHER;
+	ifp->if_capabilities = 0;
+	ifp->if_capenable = ifp->if_capabilities;
 	ifp->if_watchdog = vioif_watchdog;
 
 	ifq_set_maxlen(&ifp->if_snd, 1);
