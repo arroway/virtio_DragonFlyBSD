@@ -1260,20 +1260,14 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 	//debug("lockmgr LK_EXCLUSIVE\n");
 	//debug("sc->sc_trl_inuse: %X08\n", sc->sc_ctrl_inuse);
 
-	while(sc->sc_ctrl_inuse != ISFREE){
-
-		//debug("&sc_ctrl_wait: %08x\n", (unsigned int)&sc->sc_ctrl_wait );
-		//debug("&sc_ctrl_wait_lock: %08x\n", (unsigned int)&sc->sc_ctrl_wait_lock );
-
+	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
+	while(sc->sc_ctrl_inuse != ISFREE) {
 		debug("SLEEP");
-		lksleep(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock, 0, "msg", 0);
+		cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
 		debug("OUT OF SLEEP");
 	}
 
-	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 	sc->sc_ctrl_inuse = INUSE;
-
-	//debug("sc->sc_trl_inuse: %X08\n", sc->sc_ctrl_inuse);
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 
@@ -1342,19 +1336,18 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	/* wait for done */
 
-	//lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
-	//debug("lock exclusive\n");
+	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 
 	//debug("sc_ctrl_inuse %08X, = %d", &sc->sc_ctrl_inuse, sc->sc_ctrl_inuse);
-	while (sc->sc_ctrl_inuse != DONE){
+	while (sc->sc_ctrl_inuse != DONE) {
 		debug("SLEEP");
 		//debug("sc_ctrl_inuse %d", sc->sc_ctrl_inuse)
-		lksleep(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock, 0, "msg", 0);
+		cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
 		debug("OUT OF SLEEP");
 		//debug("out of lksleep, sc->sc_ctrl_inuse=%d", sc->sc_ctrl_inuse);
 	}
 
-	//lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
+	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 	//debug("lock release\n");
 
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_cmd_dmamap, BUS_DMASYNC_POSTWRITE);
@@ -1376,8 +1369,8 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 	//debug("lk_exclusive");
 	sc->sc_ctrl_inuse = ISFREE;
 	//debug("sc_ctrl_inuse = %d", sc->sc_ctrl_inuse);
+	cv_signal(&sc->sc_ctrl_wait);
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
-	wakeup(&sc->sc_ctrl_wait);
 	//debug("after wakeup");
 
 	//debug("out");
@@ -1496,12 +1489,12 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 		return ENOTSUP;
 
 
-	while (sc->sc_ctrl_inuse != ISFREE){
+	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
+	while (sc->sc_ctrl_inuse != ISFREE) {
 		debug("SLEEP");
-		lksleep(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock, 0, "msg", 0);
+		cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
 		debug("OUT OF SLEEP");
 	}
-	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 	sc->sc_ctrl_inuse = INUSE;
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 
@@ -1574,15 +1567,12 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 
 	// wait for done
 
-	while (sc->sc_ctrl_inuse != DONE){
-		//cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
+	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
+	while (sc->sc_ctrl_inuse != DONE) {
 		debug("SLEEP");
-		lksleep(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock, 0, "msg", 0);
+		cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
 		debug("OUT OF SLEEP");
 	}
-
-	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
-	sc->sc_ctrl_inuse = ISFREE;
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 
 	// already dequeueued
@@ -1602,10 +1592,10 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 	}
 
 out:
-lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
+	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 	sc->sc_ctrl_inuse = ISFREE;
+	cv_signal(&sc->sc_ctrl_wait);
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
-	wakeup(&sc->sc_ctrl_wait);
 
 	return r;
 
@@ -1739,7 +1729,7 @@ vioif_ctrl_vq_done(struct virtqueue *vq)
 	sc->sc_ctrl_inuse = DONE;
 	//debug("sc_ctrl_inuse %08X, = %d", &sc->sc_ctrl_inuse, sc->sc_ctrl_inuse);
 
-	wakeup(&sc->sc_ctrl_wait);
+	cv_signal(&sc->sc_ctrl_wait);
 	//debug("wakeup thread");
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 	//debug("lk_release");
@@ -1918,7 +1908,7 @@ vioif_attach(device_t dev)
 
 	/* Initialize the lock to deal with interrupts for ctrl packets
 	 * - allow recursive locks */
-
+	cv_init(&sc->sc_ctrl_wait, "ctrl_vq");
 	lockinit(&sc->sc_ctrl_wait_lock, "ctrl lock", 0, LK_CANRECURSE);
 
 	/* Initialize the lock to deal with interrupts for the rx packets

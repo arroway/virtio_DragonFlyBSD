@@ -275,8 +275,8 @@ struct vioif_softc {
 		SLEEP, AWAKE
 	} sc_run;
 
-	struct cv 				sc_ctrl_wait;
-	struct lock 			sc_ctrl_wait_lock;
+	struct cv		sc_ctrl_wait;
+	struct lock		sc_ctrl_wait_lock;
 	struct lwkt_serialize 	sc_serializer;
 	struct spinlock			lock_io;
 
