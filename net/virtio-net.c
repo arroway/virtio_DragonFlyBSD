@@ -1970,7 +1970,6 @@ vioif_attach(device_t dev)
 	ifp->if_ioctl = vioif_ioctl;
 	ifp->if_init = vioif_init;
 	ifp->if_mtu  = ETHERMTU;
-	ifp->if_type = IFT_ETHER;
 	ifp->if_capabilities = 0;
 	ifp->if_capenable = ifp->if_capabilities;
 	ifp->if_watchdog = vioif_watchdog;
@@ -1979,6 +1978,7 @@ vioif_attach(device_t dev)
 	ifq_set_ready(&ifp->if_snd);
 
 	ether_ifattach(ifp, sc->sc_mac, &sc->sc_serializer);
+	//ifp->if_serializer = &sc->sc_serializer;
 	debug("ether_ifattach");
 
 
