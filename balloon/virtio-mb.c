@@ -572,6 +572,9 @@ viomb_thread(void *arg)
 
 	sleeptime.tv_usec = 0;
 
+	/* Wake up whoever created this thread */
+	wakeup(curthread);
+
 	while(1){
 
 		sleeptime.tv_sec = 30000;
@@ -687,7 +690,7 @@ viomb_attach(device_t dev)
 	cv_init(&sc->sc_wait, "sc_wait");
 
 	r = lwkt_create(viomb_thread,
-			sc->sc_dev,
+			sc,
 			&sc->sc_viomb_td,
 			NULL, 0, 0,
 			"viomb thread");
@@ -698,6 +701,9 @@ viomb_attach(device_t dev)
 	}
 
 
+	debug("tsleep");
+	tsleep(sc->sc_viomb_td, 0, "viomb_td", 0);
+	debug("woken up");
 	/* add sysctl variables - automatically destroyed
 	 *  when the module is unloaded */
 
