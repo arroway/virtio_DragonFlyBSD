@@ -450,8 +450,8 @@ vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t caddr ,struct ucred *data)
 	struct vioif_softc *sc = ifp->if_softc;
 	int r;
 
+	ASSERT_SERIALIZED(ifp->if_serializer);
 	//s = 0; // i.e. s = splnet()
-	spin_lock(&sc->lock_io);
 
 	r = ether_ioctl(ifp, cmd, (caddr_t)data);
 
@@ -463,9 +463,6 @@ vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t caddr ,struct ucred *data)
 		else
 			r = 0;
 	}
-	spin_unlock(&sc->lock_io);
-	spin_uninit(&sc->lock_io);
-	//splx(s);
 
 	return 0;
 
