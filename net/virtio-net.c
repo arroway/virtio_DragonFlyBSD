@@ -1271,7 +1271,7 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 
-	//debug("lockmgr LK_RELEASE\n");
+	debug("lockmgr LK_RELEASE\n");
 	//debug("sc->sc_ctrl_cmd_segment len: %d ", sc->sc_ctrl_cmd_segment[0].ds_len);
 
 	sc->sc_ctrl_cmd->class = (uint8_t) VIRTIO_NET_CTRL_RX;
@@ -1283,18 +1283,18 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_rx_dmamap,BUS_DMASYNC_PREWRITE);
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_status_dmamap, BUS_DMASYNC_PREREAD);
 
-	//debug("after bus_dmamap_sync\n");
+	debug("after bus_dmamap_sync\n");
 
 	r = virtio_enqueue_prep(vsc, vq, &slot);
 
-	//debug("after virtio_enqueue_prep\n");
+	debug("after virtio_enqueue_prep\n");
 
 	if (r != 0)
 		debug("%s: control virtqueue busy!?\n", device_get_name(sc->dev));
 
 	r = virtio_enqueue_reserve(vsc, vq, slot, 3);
 
-	//debug("after virtio_enqueue_reserve\n");
+	debug("after virtio_enqueue_reserve\n");
 
 	if (r != 0)
 		debug("%s: control vq busy!?\n", device_get_name(sc->dev));
@@ -1338,7 +1338,7 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 
-	//debug("sc_ctrl_inuse %08X, = %d", &sc->sc_ctrl_inuse, sc->sc_ctrl_inuse);
+	debug("sc_ctrl_inuse %08X, = %d", &sc->sc_ctrl_inuse, sc->sc_ctrl_inuse);
 	while (sc->sc_ctrl_inuse != DONE) {
 		debug("SLEEP");
 		//debug("sc_ctrl_inuse %d", sc->sc_ctrl_inuse)
@@ -1348,13 +1348,13 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 	}
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
-	//debug("lock release\n");
+	debug("lock release\n");
 
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_cmd_dmamap, BUS_DMASYNC_POSTWRITE);
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_rx_dmamap, BUS_DMASYNC_POSTWRITE);
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_status_dmamap, BUS_DMASYNC_POSTREAD);
 
-	//debug("after bus_dmamap_sync");
+	debug("after bus_dmamap_sync");
 
 	if (sc->sc_ctrl_status->ack == VIRTIO_NET_OK)
 		r = 0;
@@ -1363,17 +1363,17 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 		r = EIO;
 	}
 
-	//debug("after if");
+	debug("after if");
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 	//debug("lk_exclusive");
 	sc->sc_ctrl_inuse = ISFREE;
-	//debug("sc_ctrl_inuse = %d", sc->sc_ctrl_inuse);
+	debug("sc_ctrl_inuse = %d", sc->sc_ctrl_inuse);
 	cv_signal(&sc->sc_ctrl_wait);
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 	//debug("after wakeup");
 
-	//debug("out");
+	debug("out");
 
 	return r;
 }
@@ -1959,10 +1959,11 @@ vioif_attach(device_t dev)
 	//ifp->if_capabilities = 0; // not needed
 	ifp->if_watchdog = vioif_watchdog;
 
+	debug("if_attach");
 	if_attach(ifp, NULL);
-	//debug("if_attach");
+	debug("if_attach (after)");
 	ether_ifattach(ifp, sc->sc_mac, NULL);
-	//debug("ether_ifattach");
+	debug("ether_ifattach");
 
 
 	/* spinlock used in vioif_ioctl*/
