@@ -361,7 +361,8 @@ vioif_start(struct ifnet *ifp)
 
 	queued = 0;
 
-	while (ifq_poll(&ifp->if_snd) != NULL){
+	m = ifq_poll(&ifp->if_snd);
+	while (m != NULL){
 
 		r = virtio_enqueue_prep(vsc, vq, &slot);
 
