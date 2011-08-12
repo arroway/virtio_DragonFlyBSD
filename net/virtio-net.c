@@ -1950,18 +1950,21 @@ vioif_attach(device_t dev)
 
 	/* Interface for the device switch */
 	kprintf("\ndevice name %s\n", device_get_name(dev));
-	strlcpy(ifp->if_xname, device_get_name(dev), IFNAMSIZ);
+	if_initname(ifp, device_get_name(dev), device_get_unit(dev));
+
 	ifp->if_softc = vsc;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	ifp->if_start = vioif_start;
 	ifp->if_ioctl = vioif_ioctl;
 	ifp->if_init = vioif_init;
+	ifp->if_mtu  = ETHERMTU;
+
 	//ifp->if_capabilities = 0; // not needed
 	ifp->if_watchdog = vioif_watchdog;
 
-	debug("if_attach");
-	if_attach(ifp, NULL);
-	debug("if_attach (after)");
+	ifq_set_maxlen(&ifp->if_snd, 1);
+	ifq_set_ready(&ifp->if_snd);
+
 	ether_ifattach(ifp, sc->sc_mac, NULL);
 	debug("ether_ifattach");
 
