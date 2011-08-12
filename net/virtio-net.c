@@ -446,26 +446,30 @@ vioif_start(struct ifnet *ifp)
 static int
 vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t caddr ,struct ucred *data)
 {
-	//debug("call");
 	struct vioif_softc *sc = ifp->if_softc;
-	int r;
+	int r = 0;
 
 	ASSERT_SERIALIZED(ifp->if_serializer);
-	//s = 0; // i.e. s = splnet()
 
-	r = ether_ioctl(ifp, cmd, (caddr_t)data);
+	switch (cmd) {
+	case SIOCGIFMEDIA:
+	case SIOCSIFMEDIA:
+		r = EOPNOTSUPP;
+		/* XXX: implement this :) */
+		break;
 
-	if((r == 0 && cmd == SIOCSIFFLAGS) ||
-			(r == ENETRESET && (cmd == SIOCADDMULTI || cmd == SIOCDELMULTI))){
-
+	case SIOCSIFFLAGS:
 		if (ifp->if_flags & IFF_RUNNING)
 			r = vioif_rx_filter(sc);
 		else
 			r = 0;
+		break;
+
+	default:
+		r = ether_ioctl(ifp, cmd, (caddr_t)data);
 	}
 
-	return 0;
-
+	return r;
 }
 
 /* ifp->if_watchdog */
