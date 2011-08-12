@@ -291,7 +291,7 @@ viomb_config_change(struct virtio_softc *vsc)
 	old = sc->sc_npages;
 	viomb_read_config(sc);
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
-	wakeup(&sc->sc_wait);
+	cv_signal(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
 	debug("lock release");
 	if (sc->sc_npages > old)
@@ -390,7 +390,7 @@ inflateq_done(struct virtqueue *vq)
 
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
 	sc->sc_inflate_done = DONE;
-	wakeup(&sc->sc_wait);
+	cv_signal(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
 	debug("lock_release");
 
@@ -510,7 +510,7 @@ deflateq_done(struct virtqueue *vq)
 
 	lockmgr(&sc->sc_waitlock, LK_EXCLUSIVE);
 	sc->sc_deflate_done = DONE;
-	wakeup(&sc->sc_wait);
+	cv_signal(&sc->sc_wait);
 	lockmgr(&sc->sc_waitlock, LK_RELEASE);
 
 	return 1;
@@ -620,7 +620,7 @@ again:
 		//mstohz function: milliseconds to clock ticks
 		//The process/thread will sleep at most timo / hz seconds
 		debug("SLEEP");
-		lksleep(&sc->sc_wait, &sc->sc_waitlock, 0, "lksleep mesg", tvtohz_low(&sleeptime));
+		cv_timedwait(&sc->sc_wait, &sc->sc_waitlock, tvtohz_low(&sleeptime));
 		debug("AWAKE");
 		lockmgr(&sc->sc_waitlock, LK_RELEASE);
 		debug("lock release");
@@ -684,7 +684,7 @@ viomb_attach(device_t dev)
 	sc->sc_deflate_done = INUSE;
 
 	lockinit(&sc->sc_waitlock, "waitlock", 0, LK_CANRECURSE);
-	//cv_init(&sc->sc_wait, "sc_wait");
+	cv_init(&sc->sc_wait, "sc_wait");
 
 	r = lwkt_create(viomb_thread,
 			sc->sc_dev,
