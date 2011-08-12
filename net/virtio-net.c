@@ -70,6 +70,7 @@
 #include <sys/mplock2.h>
 #include <vm/vm_extern.h>
 #include <cpu/i386/include/cpufunc.h>
+#include <cpu/i386/include/atomic.h>
 
 
 #include <dev/virtio/virtiovar.h>
@@ -1266,10 +1267,11 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 	if (vsc->sc_nvqs < 3)
 		return ENOTSUP;
 
-	//debug("lockmgr LK_EXCLUSIVE\n");
 	//debug("sc->sc_trl_inuse: %X08\n", sc->sc_ctrl_inuse);
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
+	debug("lockmgr LK_EXCLUSIVE\n");
+
 	while(sc->sc_ctrl_inuse != ISFREE) {
 		debug("SLEEP");
 		cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
@@ -1279,8 +1281,8 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 	sc->sc_ctrl_inuse = INUSE;
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
-
 	debug("lockmgr LK_RELEASE\n");
+
 	//debug("sc->sc_ctrl_cmd_segment len: %d ", sc->sc_ctrl_cmd_segment[0].ds_len);
 
 	sc->sc_ctrl_cmd->class = (uint8_t) VIRTIO_NET_CTRL_RX;
@@ -1374,12 +1376,16 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	debug("after if");
 
-	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
+	//lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
 	//debug("lk_exclusive");
-	sc->sc_ctrl_inuse = ISFREE;
-	debug("sc_ctrl_inuse = %d", sc->sc_ctrl_inuse);
+	//sc->sc_ctrl_inuse = ISFREE;
+	//debug("sc_ctrl_inuse = %d", sc->sc_ctrl_inuse);
+
+	debug("atomic_cmpset_int");
+	atomic_cmpset_int(&sc->sc_ctrl_inuse, DONE, ISFREE);
 	cv_signal(&sc->sc_ctrl_wait);
-	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
+
+	//lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 	//debug("after wakeup");
 
 	debug("out");

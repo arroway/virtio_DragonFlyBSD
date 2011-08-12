@@ -77,7 +77,7 @@
 
 struct vq_entry {
 	TAILQ_ENTRY(vq_entry)	qe_list;	/* free list */
-	uint16_t			qe_index;	/* index in vq_desc array */
+	uint16_t				qe_index;	/* index in vq_desc array */
 
 	/* followings are used only when it is the `head' entry */ 
 	int16_t				qe_next;	/* next enq slot */
