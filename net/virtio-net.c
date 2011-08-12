@@ -330,7 +330,8 @@ vioif_start(struct ifnet *ifp)
 	struct virtio_softc *vsc = sc->sc_virtio;
 	struct virtqueue *vq = &sc->sc_vq[TX_VQ]; /* tx vq */
 	struct mbuf *m;
-	int queued = 0, retry = 0;
+	int queued;
+	int retry = 0;
 	int slot, r, i;
 
 	/* Allocate an mbuf and initialize it to contain internal data */
@@ -343,7 +344,7 @@ vioif_start(struct ifnet *ifp)
 
 	m->m_len = m->m_pkthdr.len = MCLBYTES;*/
 
-	MGETHDR(m, M_RNOWAIT, MT_DATA);
+	/*MGETHDR(m, M_RNOWAIT, MT_DATA);
 	if (m == NULL)
 		return;
 
@@ -351,17 +352,22 @@ vioif_start(struct ifnet *ifp)
 	if ((m->m_flags & M_EXT) == 0) {
 		m_freem(m);
 		return;
-	}
+	}*/
+
+	ASSERT_SERIALIZED(ifp->if_serializer);
 
 	if ((ifp->if_flags & (IFF_RUNNING|IFF_OACTIVE)) != IFF_RUNNING)
 		return;
 
+	queued = 0;
+
 	while (ifq_poll(&ifp->if_snd) != NULL){
-		debug("while");
+
 		r = virtio_enqueue_prep(vsc, vq, &slot);
 
 		if (r == EAGAIN){
 			ifp->if_flags |= IFF_OACTIVE;
+			/*tx interrupt*/
 			vioif_tx_vq_done(vq);
 
 			if (retry++ == 0)
@@ -377,6 +383,7 @@ vioif_start(struct ifnet *ifp)
 
 		//debug("slot: %d", slot);
 
+		/* Maps mbuf chains*/
 	    r = bus_dmamap_load_mbuf(vsc->requests_dmat,
 	    		sc->sc_tx_dmamaps[slot],
 	    		m,
@@ -413,33 +420,37 @@ vioif_start(struct ifnet *ifp)
 			else
 				break;
 		}
-		ifq_dequeue(&ifp->if_snd, m);
-		sc->sc_tx_mbufs[slot] = m;
 
+		m = ifq_dequeue(&ifp->if_snd, 0);
+		if (m == NULL)
+			break;
+
+		sc->sc_tx_mbufs[slot] = m;
 		memset(&sc->sc_tx_hdrs[slot], 0, sizeof(struct virtio_net_hdr));
 
 		bus_dmamap_sync(vsc->requests_dmat, sc->sc_tx_dmamaps[slot], BUS_DMASYNC_PREWRITE);
 		bus_dmamap_sync(vsc->requests_dmat, sc->sc_txhdr_dmamaps[slot], BUS_DMASYNC_PREWRITE);
 
-
-		//segs from callback function ?
 		virtio_enqueue(vsc, vq, slot, sc->sc_txhdr_segment[slot],sc->sc_txhdr_nseg[slot], *(sc->sc_txhdr_dmamaps), true);
 		virtio_enqueue(vsc, vq, slot, sc->sc_tx_segment[slot],sc->sc_tx_nseg[slot], *(sc->sc_tx_dmamaps), true);
 
+		/* add to the transmit ring */
 		virtio_enqueue_commit(vsc, vq, slot, false);
 
-		queued++;
+		queued = 1;
 
 #if NBPFILTER > 0
 		if (ifp->if_bpf)
-     	bpf_mtap(ifp->if_bpf, m);
+			/* if there is a NBPFILTER, bounce a copy of this frame to him */
+			bpf_mtap(ifp->if_bpf, m);
 #endif
 
-		debug("end while");
 	}
 
 	if (queued > 0) {
+		/* transmitting */
 		virtio_enqueue_commit(vsc, vq, -1, true);
+		/* set a timer */
 		ifp->if_timer = 5;
 	}
 }
