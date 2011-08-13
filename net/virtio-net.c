@@ -70,8 +70,10 @@
 #include <sys/msgport2.h>
 #include <sys/mplock2.h>
 #include <vm/vm_extern.h>
+#if 0
 #include <cpu/i386/include/cpufunc.h>
 #include <cpu/i386/include/atomic.h>
+#endif
 
 #include <dev/virtio/virtiovar.h>
 #include <dev/virtio/virtioreg.h>
@@ -1401,19 +1403,12 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	debug("after if");
 
-	//lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
-	//debug("lk_exclusive");
-	//sc->sc_ctrl_inuse = ISFREE;
-	//debug("sc_ctrl_inuse = %d", sc->sc_ctrl_inuse);
-
-	debug("atomic_cmpset_int");
-	atomic_cmpset_int(&sc->sc_ctrl_inuse, DONE, ISFREE);
+	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
+	sc->sc_ctrl_inuse = ISFREE;
 	cv_signal(&sc->sc_ctrl_wait);
+	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
 
-	//lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
-	//debug("after wakeup");
-
-	debug("out");
+	debug("after wakeup");
 
 	return r;
 }
