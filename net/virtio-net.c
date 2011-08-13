@@ -113,7 +113,7 @@ static int	vioif_tx_vq_done(struct virtqueue *);
 static void	vioif_tx_drain(struct vioif_softc *);
 
 /* other control */
-static int	vioif_updown(struct vioif_softc *, bool);
+static int	vioif_updown(struct vioif_softc *, struct ifnet *, bool);
 static int	vioif_ctrl_rx(struct vioif_softc *, int, bool);
 static int	vioif_set_promisc(struct vioif_softc *, bool);
 static int	vioif_set_allmulti(struct vioif_softc *, bool);
@@ -282,7 +282,7 @@ vioif_init(void *arg)
 
 	vioif_down(ifp, 0);
 	vioif_populate_rx_mbufs(sc);
-	vioif_updown(sc, true);
+	vioif_updown(sc, ifp, true);
 
 	ifp->if_flags |= IFF_RUNNING;
 	ifp->if_flags &= ~IFF_OACTIVE;
@@ -317,7 +317,7 @@ vioif_down(struct ifnet *ifp, int disable)
 		virtio_start_vq_intr(vsc, &sc->sc_vq[CTRL_VQ]);
 
 	virtio_reset(vsc);
-	vioif_updown(sc, false);
+	vioif_updown(sc, ifp, false);
 }
 
 
@@ -472,11 +472,19 @@ vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data, struct ucred *cr)
 		break;
 
 	case SIOCSIFFLAGS:
-		if (ifp->if_flags & IFF_RUNNING)
-			//taskqueue_enqueue ?
-			r = vioif_rx_filter(sc);
-		else
-			r = 0;
+		if (ifp->if_flags & IFF_UP) {
+			if (ifp->if_flags & IFF_RUNNING) {
+				if (((ifp->if_flags ^ sc->sc_if_flags)
+				    & (IFF_PROMISC | IFF_ALLMULTI)) != 0)
+					r = vioif_rx_filter(sc);
+			} else {
+				vioif_init(ifp);
+			}
+		} else {
+			if (ifp->if_flags & IFF_RUNNING)
+				vioif_down(ifp, /* disable */1);
+		}
+		sc->sc_if_flags = ifp->if_flags;
 		break;
 
 	default:
@@ -500,7 +508,7 @@ vioif_watchdog(struct ifnet *ifp)
 
 /* change link status */
 static int
-vioif_updown(struct vioif_softc *sc, bool isup)
+vioif_updown(struct vioif_softc *sc, struct ifnet *ifp, bool isup)
 {
 	//debug("call");
 	struct virtio_softc *vsc = sc->sc_virtio;
@@ -511,6 +519,12 @@ vioif_updown(struct vioif_softc *sc, bool isup)
 	bus_space_write_1(vsc->sc_iot, vsc->sc_ioh,
 				     VIRTIO_NET_CONFIG_STATUS,
 				     isup?VIRTIO_NET_S_LINK_UP:0);
+
+	if (ifp != NULL) {
+		ifp->if_link_state = (isup) ? LINK_STATE_UP : LINK_STATE_DOWN;
+		if_link_state_change(ifp);
+	}
+
 	return 0;
 }
 
@@ -1516,7 +1530,7 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 			(sizeof(struct virtio_net_ctrl_mac_tbl)
 			+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_uc->nentries),
 			cmd_load_callback,
-			&sc,
+			sc,
 			0);
 
 	if (r) {
@@ -1536,7 +1550,7 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 			(sizeof(struct virtio_net_ctrl_mac_tbl)
 			+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_mc->nentries),
 			cmd_load_callback,
-			&sc,
+			sc,
 			0);
 
 	if (r) {

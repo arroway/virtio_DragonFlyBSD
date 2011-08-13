@@ -190,6 +190,7 @@ struct vioif_softc {
 	uint32_t 		sc_features;
 	int 			maxxfersize;
 
+	int			sc_if_flags;
 	short 			sc_ifflags;
 	uint8_t 		sc_mac[ETHER_ADDR_LEN];
 	struct arpcom 	sc_arpcom;
