@@ -695,21 +695,21 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	for (i = 0; i < nseg; i++) {
 		//debug("in for loop");
 
-		//debug("i = %d, addr :%08X", i, segs[i].ds_addr );
-		//debug(" i = %d, len :%08X", i, segs[i].ds_len );
+		debug("i = %d, addr :%08X", i, segs[i].ds_addr );
+		debug(" i = %d, len :%08X", i, segs[i].ds_len );
 
 		vd[s].addr = segs[i].ds_addr;
 		vd[s].len = segs[i].ds_len;
 
 		if (!write)
 			vd[s].flags |= VRING_DESC_F_WRITE;
-		//debug("s:%d addr:0x%08X len:%lu\n", s, vd[s].addr,(unsigned long) vd[s].len);
+		debug("s:%d addr:0x%08X len:%lu\n", s, vd[s].addr,(unsigned long) vd[s].len);
 		s = vd[s].next;
-		//debug("i = %d, next :%08X", i, vd[s].next );
+		debug("i = %d, next :%08X", i, vd[s].next );
 	}
 
 	qe1->qe_next = s;
-	//debug("out of virtio_enqueue");
+	debug("out of virtio_enqueue");
 
 	return 0;
 }

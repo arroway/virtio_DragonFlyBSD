@@ -158,6 +158,8 @@ rxhdr_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int e
 
 	for(i=0; i<nseg ; i++){
 		sc->sc_segment_temp_rx[i] = segs[i]; /* Save segments information */
+		//debug("seg %d len:%08X, sc->sc_segment_temp_rx[i].ds_len: %08X ", i, segs[i].ds_len, sc->sc_segment_temp_rx[i].ds_len);
+	
 	}
 
     return;
@@ -183,6 +185,8 @@ txhdr_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int e
 
 	for(i = 0; i<nseg ; i++){
 		sc->sc_segment_temp_tx[i] = segs[i]; /* Save segments information */
+		//debug("seg %d len:%08X, sc->sc_segment_temp_tx[i].ds_len: %08X ", i, segs[i].ds_len, sc->sc_segment_temp_tx[i].ds_len);
+
 	}
 
     return;
@@ -205,7 +209,7 @@ cmd_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int err
 
 	/* Temporarily save information there */
 	sc->sc_ctrl_nseg_temp = nseg; /* How many segments there is */
-	//debug("nseg = %d", nseg);
+	debug("nseg = %d", nseg);
 
 	for(i = 0; i< nseg ; i++){
 		sc->sc_ctrl_segment_temp[i] = segs[i]; /* Save segments information */
@@ -812,7 +816,6 @@ vioif_alloc_mems(struct vioif_softc *sc)
 		sc->sc_rxhdr_segment[i] = sc->sc_segment_temp_rx;
 
 
-
 		dmamap_create(sc,
 				sc->sc_rx_dmamaps[i],
 				allocsize2,
@@ -838,6 +841,7 @@ vioif_alloc_mems(struct vioif_softc *sc)
 
 		sc->sc_txhdr_nseg[i] = sc->sc_nseg_temp_tx;
 		sc->sc_txhdr_segment[i] = sc->sc_segment_temp_tx;
+	//	debug("sc->sc_txhdr_segment len: %d ", sc->sc_txhdr_segment[i].ds_len);
 
 
 
@@ -901,9 +905,11 @@ vioif_alloc_mems(struct vioif_softc *sc)
 
 		for (i=0; i < sc->sc_ctrl_status_nseg; i++){
 			sc->sc_ctrl_status_segment[i] = sc->sc_ctrl_segment_temp[i];
+			//debug("seg %d sc->sc_ctrl_status_segment[i].ds_len: %08X ", i,sc->sc_ctrl_status_segment[i].ds_len);
+		
 		}
 		if (sc->sc_ctrl_status_nseg != 1)
-			debug("ctrl_status_segment: more than one segment");
+			//debug("ctrl_status_segment: more than one segment");
 
 
 
@@ -1503,11 +1509,13 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 	struct virtqueue *vq = &sc->sc_vq[CTRL_VQ];
 	int r, slot, i;
 
+
 	if (vsc->sc_nvqs < 3)
 		return ENOTSUP;
-
+		
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
+	
 	while (sc->sc_ctrl_inuse != ISFREE) {
 		debug("SLEEP");
 		cv_wait(&sc->sc_ctrl_wait, &sc->sc_ctrl_wait_lock);
@@ -1521,7 +1529,7 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 
 	r = bus_dmamap_load(vsc->requests_dmat,
 			sc->sc_ctrl_tbl_uc_dmamap,
-			sc->sc_ctrl_mac_tbl_uc,
+			&sc->sc_ctrl_mac_tbl_uc,
 			(sizeof(struct virtio_net_ctrl_mac_tbl)
 			+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_uc->nentries),
 			cmd_load_callback,
@@ -1541,7 +1549,7 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 
 	r = bus_dmamap_load(vsc->requests_dmat,
 			sc->sc_ctrl_tbl_mc_dmamap,
-			sc->sc_ctrl_mac_tbl_mc,
+			&sc->sc_ctrl_mac_tbl_mc,
 			(sizeof(struct virtio_net_ctrl_mac_tbl)
 			+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_mc->nentries),
 			cmd_load_callback,
@@ -1631,6 +1639,8 @@ vioif_rx_filter(struct vioif_softc *sc)
 	int nentries;
 	int promisc = 0, allmulti = 0, rxfilter = 0;
 	int r;
+	
+	debug("sc_ctrl_inuse %08X, = %d", &sc->sc_ctrl_inuse, sc->sc_ctrl_inuse);
 
 	if (vsc->sc_nvqs < 3) {	//no ctrl vq; always promisc
 		ifp->if_flags |= IFF_PROMISC;
@@ -1674,6 +1684,7 @@ vioif_rx_filter(struct vioif_softc *sc)
 	rxfilter = 1;
 
 set:
+	debug("sc_ctrl_inuse %08X, = %d", &sc->sc_ctrl_inuse, sc->sc_ctrl_inuse);
 	if (rxfilter) {
 		sc->sc_ctrl_mac_tbl_uc->nentries = 0;
 		sc->sc_ctrl_mac_tbl_mc->nentries = nentries;
