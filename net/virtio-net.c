@@ -1505,7 +1505,7 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 	// filter already set in sc_trl_mac_tbl
 	//debug("call");
 	struct virtio_softc *vsc = sc->sc_virtio;
-	struct virtqueue *vq = &sc->sc_vq[TX_VQ];
+	struct virtqueue *vq = &sc->sc_vq[CTRL_VQ];
 	int r, slot, i;
 
 	if (vsc->sc_nvqs < 3)
