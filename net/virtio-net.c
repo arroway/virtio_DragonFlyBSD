@@ -1742,15 +1742,15 @@ vioif_ctrl_vq_done(struct virtqueue *vq)
 	//debug("wakeup");
 
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_EXCLUSIVE);
-	//debug("lk_exclusive");
+	debug("lk_exclusive");
 
 	sc->sc_ctrl_inuse = DONE;
-	//debug("sc_ctrl_inuse %08X, = %d", &sc->sc_ctrl_inuse, sc->sc_ctrl_inuse);
+	debug("sc_ctrl_inuse %08X, = %d", &sc->sc_ctrl_inuse, sc->sc_ctrl_inuse);
 
 	cv_signal(&sc->sc_ctrl_wait);
-	//debug("wakeup thread");
+	debug("wakeup thread");
 	lockmgr(&sc->sc_ctrl_wait_lock, LK_RELEASE);
-	//debug("lk_release");
+	debug("lk_release");
 
 	return 1;
 }

@@ -745,6 +745,7 @@ virtio_vq_intr(struct virtio_softc *sc)
 	struct virtqueue *vq;
 	int i, r = 0;
 
+	debug("call");
 	for (i = 0; i < sc->sc_nvqs; i++) {
 		vq = &sc->sc_vqs[i];
 		if (vq->vq_queued) {
@@ -754,6 +755,7 @@ virtio_vq_intr(struct virtio_softc *sc)
 		vq_sync_uring(sc, vq, BUS_DMASYNC_POSTREAD);
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_used_idx, 2, 
 				  BUS_SPACE_BARRIER_READ);
+		debug("processing vq %d (used_idx vs idx) = (%d vs %d)\n", i, vq->vq_used_idx, vq->vq_used->idx);
 		if (vq->vq_used_idx != vq->vq_used->idx) {
 			if (vq->vq_done)
 				r |= (vq->vq_done)(vq);
