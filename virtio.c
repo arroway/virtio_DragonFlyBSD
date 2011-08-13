@@ -24,6 +24,7 @@
  *
  */
 
+#include <machine/inttypes.h>
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/conf.h>
@@ -681,12 +682,13 @@ int
 virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	       bus_dma_segment_t *segs, int nseg, bus_dmamap_t dmamap, bool write)
 {
-	//debug("call");
+	debug("call");
 	struct vq_entry *qe1 = &vq->vq_entries[slot];
 	struct vring_desc *vd = qe1->qe_desc_base;
 	int i;
 	int s = qe1->qe_next;
 
+	print_backtrace(5);
 	//debug("enter virtio_enqueue");
 
 	KKASSERT(s >= 0);
@@ -695,15 +697,15 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	for (i = 0; i < nseg; i++) {
 		//debug("in for loop");
 
-		debug("i = %d, addr :%08X", i, segs[i].ds_addr );
-		debug(" i = %d, len :%08X", i, segs[i].ds_len );
+		debug("i = %d, addr :%"PRIx64, i, (uint64_t)segs[i].ds_addr );
+		debug(" i = %d, len :%"PRIx64, i, (uint64_t)segs[i].ds_len );
 
 		vd[s].addr = segs[i].ds_addr;
 		vd[s].len = segs[i].ds_len;
 
 		if (!write)
 			vd[s].flags |= VRING_DESC_F_WRITE;
-		debug("s:%d addr:0x%08X len:%lu\n", s, vd[s].addr,(unsigned long) vd[s].len);
+		debug("s:%d addr:0x%"PRIx64" len:%"PRIu64, s, (uint64_t)vd[s].addr, (uint64_t)vd[s].len);
 		s = vd[s].next;
 		debug("i = %d, next :%08X", i, vd[s].next );
 	}

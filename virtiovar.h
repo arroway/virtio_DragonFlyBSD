@@ -67,10 +67,10 @@
 #define VIRTIO_DEBUG
 
 #ifdef VIRTIO_DEBUG 
-	#define debug(fmt, args...) do { kprintf("%s: " fmt "\n", __func__ , ##args); } \
+	#define debug(fmt, ...) do { kprintf("%s: " fmt "\n", __func__ , ##__VA_ARGS__); } \
 	while(0)
 #else 
-	#define debug( fmt, args...)
+	#define debug( fmt, ...)
 #endif
 
 //#include "virtioreg.h"

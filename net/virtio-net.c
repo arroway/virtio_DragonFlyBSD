@@ -881,7 +881,7 @@ vioif_alloc_mems(struct vioif_softc *sc)
 		}
 
 		if (sc->sc_ctrl_cmd_nseg != 1)
-			//debug("ctrl_cmd_segment: more than one segment");
+			debug("ctrl_cmd_segment: more than one segment");
 
 		//debug("\n 0 cmd seg len: %08X ", sc->sc_ctrl_cmd_segment[0].ds_len);
 		//debug("1 cmd seg len: %08X ", sc->sc_ctrl_cmd_segment[1].ds_len);
