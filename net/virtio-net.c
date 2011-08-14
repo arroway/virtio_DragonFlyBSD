@@ -152,6 +152,7 @@ rxhdr_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int e
 	}
 
 	sc->sc_vq[RX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
+	debug("rx: vq_desc->addr: %08X", sc->sc_vq[RX_VQ].vq_desc->addr);
 
 	/* Temporarily save information there */
 	sc->sc_nseg_temp_rx = nseg; /* How much segments there is */
@@ -206,6 +207,8 @@ cmd_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int err
 	}
 
 	sc->sc_vq[CTRL_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
+	debug("ctrl: vq_desc->addr: %08X", sc->sc_vq[CTRL_VQ].vq_desc->addr);
+
 
 	/* Temporarily save information there */
 	sc->sc_ctrl_nseg_temp = nseg; /* How many segments there is */
@@ -1329,6 +1332,8 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	debug("after bus_dmamap_sync\n");
 
+	debug("ctrl: vq_desc->addr: %08X", sc->sc_vq[CTRL_VQ].vq_desc->addr);
+
 	r = virtio_enqueue_prep(vsc, vq, &slot);
 
 	debug("after virtio_enqueue_prep\n");
@@ -1342,7 +1347,7 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 
 	if (r != 0)
 		debug("%s: control vq busy!?\n", device_get_name(sc->dev));
-
+		
 	//debug("slot: %d", slot);
 	virtio_enqueue(vsc, vq, slot,
 			sc->sc_ctrl_cmd_segment,
@@ -1375,6 +1380,8 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 	//for (i=0; i<sc->sc_ctrl_cmd_nseg; i++){
 		//debug(" i: %d sc->sc_ctrl_cmd_segment len: %d ", i, sc->sc_ctrl_cmd_segment[i].ds_len);
 	//}
+
+	debug("ctrl: vq_desc->addr: %08X", sc->sc_vq[CTRL_VQ].vq_desc->addr);
 
 	virtio_enqueue_commit(vsc, vq, slot, true);
 
@@ -1575,6 +1582,9 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_tbl_mc_dmamap,BUS_DMASYNC_PREWRITE);
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_status_dmamap,BUS_DMASYNC_PREREAD);
 
+
+	debug("ctrl: vq_desc->addr: %08X", sc->sc_vq[CTRL_VQ].vq_desc->addr);
+
 	r = virtio_enqueue_prep(vsc, vq, &slot);
 
 	if (r != 0)
@@ -1589,6 +1599,9 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 	virtio_enqueue(vsc, vq, slot, sc->sc_ctrl_uc_segment, sc->sc_ctrl_uc_nseg, sc->sc_ctrl_tbl_uc_dmamap, true);
 	virtio_enqueue(vsc, vq, slot, sc->sc_ctrl_mc_segment, sc->sc_ctrl_mc_nseg, sc->sc_ctrl_tbl_mc_dmamap, true);
 	virtio_enqueue(vsc, vq, slot, sc->sc_ctrl_status_segment, sc->sc_ctrl_status_nseg, sc->sc_ctrl_status_dmamap, false);
+
+	debug("ctrl: vq_desc->addr: %08X", sc->sc_vq[CTRL_VQ].vq_desc->addr);
+
 	virtio_enqueue_commit(vsc, vq, slot, true);
 
 	// wait for done

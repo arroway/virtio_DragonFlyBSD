@@ -490,7 +490,8 @@ virtio_enqueue_commit(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 		      bool notifynow)
 {
 	//debug("call");
-	struct vq_entry *qe1;
+	struct vq_entry *qe1 = &vq->vq_entries->qe_desc_base;
+	u_int16_t r;
 
 	if (slot < 0) {
 		spin_lock(&vq->vq_aring_lock);
@@ -528,6 +529,7 @@ notify:
 		//debug("bus_space_barrier\n");
 
 		vq->vq_avail->idx = vq->vq_avail_idx;
+		debug("vq->vq_avail->idx %d", vq->vq_avail->idx);
 		//debug("after affectation\n");
 
 		vq_sync_aring(sc, vq, BUS_DMASYNC_PREWRITE);    
@@ -538,10 +540,10 @@ notify:
 		//debug("bus_space_barrier write\n");
 
 		vq->vq_queued++;
-		//debug("incr vq_queued\n");
+		debug("vq->vq_queued: %d", vq->vq_queued);
 
 		vq_sync_uring(sc, vq, BUS_DMASYNC_POSTREAD);
-		//debug("after vq_sync_aring postread\n");
+		debug("after vq_sync_aring postread\n");
 
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_used->flags, 2,
 				  BUS_SPACE_BARRIER_READ);
@@ -551,16 +553,20 @@ notify:
 		if (!(vq->vq_used->flags & VRING_USED_F_NO_NOTIFY)) {
 
 			//debug("in if\n");
-
+			debug("processing vq (used_idx vs idx) = (%d vs %d)\n", vq->vq_used_idx, vq->vq_used->idx);
+			debug("vq_index: %d", vq->vq_index);
+			debug("qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
+		
 			bus_space_write_2(sc->sc_iot, sc->sc_ioh,
 					  VIRTIO_CONFIG_QUEUE_NOTIFY,
 					  vq->vq_index);
-
-			//debug("after bus_space_write\n");
-
+								
 		}
 	}
 	spin_unlock(&vq->vq_aring_lock);
+	debug("processing vq (used_idx vs idx) = (%d vs %d)\n", vq->vq_used_idx, vq->vq_used->idx);
+	debug("qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
+	
 	//debug("end of virito_enqueue_commit\n");
 	return 0;
 }
@@ -628,6 +634,8 @@ virtio_enqueue_reserve(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 		}
 		vd[i].flags = 0;
 		qe1->qe_next = 0;
+		
+		debug("indirect - qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
 
 		return 0;
 	} else {
@@ -647,6 +655,8 @@ virtio_enqueue_reserve(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 			s = qe->qe_index;
 		}
 		vd[s].flags = 0;
+
+		debug("direct - qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
 
 		return 0;
 	}
@@ -694,6 +704,8 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	KKASSERT(s >= 0);
 	//debug("after KKASSERT");
 
+	debug("qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
+
 	for (i = 0; i < nseg; i++) {
 		//debug("in for loop");
 
@@ -711,6 +723,7 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	}
 
 	qe1->qe_next = s;
+	debug("qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
 	debug("out of virtio_enqueue");
 
 	return 0;
