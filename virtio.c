@@ -490,8 +490,7 @@ virtio_enqueue_commit(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 		      bool notifynow)
 {
 	//debug("call");
-	struct vq_entry *qe1 = &vq->vq_entries->qe_desc_base;
-	u_int16_t r;
+	struct vq_entry *qe1;
 
 	if (slot < 0) {
 		spin_lock(&vq->vq_aring_lock);
@@ -503,6 +502,7 @@ virtio_enqueue_commit(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	//debug("vq_sync_desc");
 
 	qe1 = &vq->vq_entries[slot];
+	debug("qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
 	if (qe1->qe_indirect){
 		//debug("inside if vq_entries");
 		vq_sync_indirect(sc, vq, slot, BUS_DMASYNC_PREWRITE);
@@ -555,7 +555,6 @@ notify:
 			//debug("in if\n");
 			debug("processing vq (used_idx vs idx) = (%d vs %d)\n", vq->vq_used_idx, vq->vq_used->idx);
 			debug("vq_index: %d", vq->vq_index);
-			debug("qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
 		
 			bus_space_write_2(sc->sc_iot, sc->sc_ioh,
 					  VIRTIO_CONFIG_QUEUE_NOTIFY,
@@ -565,7 +564,6 @@ notify:
 	}
 	spin_unlock(&vq->vq_aring_lock);
 	debug("processing vq (used_idx vs idx) = (%d vs %d)\n", vq->vq_used_idx, vq->vq_used->idx);
-	debug("qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
 	
 	//debug("end of virito_enqueue_commit\n");
 	return 0;

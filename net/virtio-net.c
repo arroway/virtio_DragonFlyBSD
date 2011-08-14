@@ -180,6 +180,8 @@ txhdr_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int e
 	}
 
 	sc->sc_vq[TX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
+	debug("tx: vq_desc->addr: %08X", sc->sc_vq[TX_VQ].vq_desc->addr);
+	
 
 	/* Temporarily save information there */
 	sc->sc_nseg_temp_tx = nseg; /* How much segments there is */
@@ -268,6 +270,7 @@ tx_load_mbuf_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, bus
 	}
 
 	sc->sc_vq[TX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
+	debug("tx mbuf: vq_desc->addr: %08X", sc->sc_vq[TX_VQ].vq_desc->addr);
 
 	/* Temporarily save information there */
 	sc->sc_nseg_temp_tx = nseg; /* How much segments there is */
