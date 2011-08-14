@@ -88,7 +88,7 @@ struct vq_entry {
 struct virtqueue {
 	struct virtio_softc	*vq_owner; 
 	u_int32_t			vq_num;	/* queue size (# of entries) */
-	int32_t				vq_index;	/* queue number (0, 1, ...) */
+	u_int16_t				vq_index;	/* queue number (0, 1, ...) */
 
 	/* vring pointers (KVA) */
 	struct vring_desc       *vq_desc;
