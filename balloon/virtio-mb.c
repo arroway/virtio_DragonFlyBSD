@@ -119,7 +119,8 @@ struct viomb_softc {
 	int 				sc_nseg_temp;
 	bus_dma_segment_t	*sc_segment_temp;
 
-};
+};f
+
 
 
 static int	balloon_initialized = 0; /* multiple balloon is not allowed */
@@ -274,7 +275,7 @@ viomb_read_config(struct viomb_softc *sc)
 	//sc_npages
 	reg = virtio_read_device_config_4(sc->sc_virtio,
 			VIRTIO_BALLOON_CONFIG_ACTUAL);
-	sc->sc_actual = le32toh(reg);
+	//sc->sc_actual = le32toh(reg);
 }
 
 
@@ -722,6 +723,27 @@ viomb_attach(device_t dev)
 
 	return 0;
 
+	/* add sysctl variables - automatically destroyed
+	 *  when the module is unloaded */
+
+	SYSCTL_NODE(_hw,
+			OID_AUTO,
+			viomb,
+			CTLFLAG_RD,
+			0,
+			"Virtio balloon driver status");
+	TUNABLE_INT("hw.viomb.npages",
+			&sc->sc_npages);
+	SYSCTL_INT(_hw_viomb,
+			OID_AUTO,
+			&sc->sc_npages,
+			CTLFLAG_RW,
+			&sc->sc_npages,
+			0,
+			"Virtio Balloon npages value");
+	TUNABLE_INT("hw.viomb.actual", &sc->sc_actual);
+	SYSCTL_INT(_hw_viomb, OID_AUTO, sc->sc_actual, CTLFLAG_RW, &sc->sc_actual, 0,
+				"Virtio Balloon actual value");
 
 err:
 	debug("attach failure");
