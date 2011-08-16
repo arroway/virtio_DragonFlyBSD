@@ -240,16 +240,16 @@ rx_load_mbuf_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, bus
 	}
 
 	sc->sc_vq[RX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
-	//debug("vq_desc->addr = %08X ", sc->sc_vq[RX_VQ].vq_desc->addr);
+	debug("vq_desc->addr = %08X ", sc->sc_vq[RX_VQ].vq_desc->addr);
 
 	/* Temporarily save information there */
 	sc->sc_nseg_temp_rx = nseg; /* How much segments there is */
-	//debug("nseg = %d", nseg);
+	debug("nseg = %d", nseg);
 
 
 	for(i = 0; i<nseg ; i++){
 		sc->sc_segment_temp_rx[i] = segs[i]; /* Save segments information */
-		//debug("seg %d len:%08X, sc->sc_segment_temp_rx[i].ds_len: %08X ", i, segs[i].ds_len, sc->sc_segment_temp_rx[i].ds_len);
+		debug("seg %d len:%08X, sc->sc_segment_temp_rx[i].ds_len: %08X ", i, segs[i].ds_len, sc->sc_segment_temp_rx[i].ds_len);
 
 	}
 
@@ -274,11 +274,11 @@ tx_load_mbuf_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, bus
 
 	/* Temporarily save information there */
 	sc->sc_nseg_temp_tx = nseg; /* How much segments there is */
-	//debug("nseg = %d", nseg);
+	debug("nseg = %d", nseg);
 
 	for(i = 0; i<nseg ; i++){
 		sc->sc_segment_temp_rx[i] = segs[i]; /* Save segments information */
-		//debug("seg %d len:%08X, sc->sc_segment_temp_rx[i].ds_len: %08X ", i, segs[i].ds_len, sc->sc_ctrl_segment_temp[i].ds_len);
+		debug("seg %d len:%08X, sc->sc_segment_temp_rx[i].ds_len: %08X ", i, segs[i].ds_len, sc->sc_ctrl_segment_temp[i].ds_len);
 	}
 
     return;
@@ -413,8 +413,10 @@ vioif_start(struct ifnet *ifp)
 		}
 
 		sc->sc_tx_nseg[slot] = sc->sc_nseg_temp_tx;
+		debug("sc->sc_tx_nseg[slot]: %d", sc->sc_tx_nseg[slot]);
 		for (i=0; i< sc->sc_tx_nseg[slot]; i++){
 			sc->sc_tx_segment[slot][i] = sc->sc_segment_temp_tx[i];
+			debug("slot: %d seg %d sc->sc_tx_segment[slot][i].ds_len: %08X ", slot, i, sc->sc_tx_segment[slot][i].ds_len);
 		}
 
 
@@ -434,8 +436,10 @@ vioif_start(struct ifnet *ifp)
 		}
 
 		m = ifq_dequeue(&ifp->if_snd, 0);
-		if (m == NULL)
+		if (m == NULL){
+			debug("mbuf after dequeue is null");
 			break;
+		}
 
 		sc->sc_tx_mbufs[slot] = m;
 		memset(&sc->sc_tx_hdrs[slot], 0, sizeof(struct virtio_net_hdr));
@@ -443,8 +447,8 @@ vioif_start(struct ifnet *ifp)
 		bus_dmamap_sync(vsc->requests_dmat, sc->sc_tx_dmamaps[slot], BUS_DMASYNC_PREWRITE);
 		bus_dmamap_sync(vsc->requests_dmat, sc->sc_txhdr_dmamaps[slot], BUS_DMASYNC_PREWRITE);
 
-		virtio_enqueue(vsc, vq, slot, sc->sc_txhdr_segment[slot],sc->sc_txhdr_nseg[slot], *(sc->sc_txhdr_dmamaps), true);
-		virtio_enqueue(vsc, vq, slot, sc->sc_tx_segment[slot],sc->sc_tx_nseg[slot], *(sc->sc_tx_dmamaps), true);
+		virtio_enqueue(vsc, vq, slot, sc->sc_txhdr_segment[slot],sc->sc_txhdr_nseg[slot], sc->sc_txhdr_dmamaps[slot], true);
+		virtio_enqueue(vsc, vq, slot, sc->sc_tx_segment[slot],sc->sc_tx_nseg[slot], sc->sc_tx_dmamaps[slot], true);
 
 		/* add to the transmit ring */
 		virtio_enqueue_commit(vsc, vq, slot, false);
@@ -1064,7 +1068,7 @@ vioif_populate_rx_mbufs(struct vioif_softc *sc)
 		}
 
 		r = virtio_enqueue_reserve(vsc, vq, slot,
-					*sc->sc_rx_nseg + 1);
+					sc->sc_rx_nseg[slot] + 1);
 
 		if (r != 0) {
 			vioif_free_rx_mbuf(sc, slot);
@@ -1074,7 +1078,7 @@ vioif_populate_rx_mbufs(struct vioif_softc *sc)
 		bus_dmamap_sync(vsc->requests_dmat, sc->sc_rxhdr_dmamaps[slot], BUS_DMASYNC_PREREAD);
 		bus_dmamap_sync(vsc->requests_dmat, sc->sc_rx_dmamaps[slot], BUS_DMASYNC_PREREAD);
 
-		virtio_enqueue(vsc, vq, slot, sc->sc_rxhdr_segment[slot], sc->sc_rxhdr_nseg[slot], *sc->sc_rxhdr_dmamaps, false);
+		virtio_enqueue(vsc, vq, slot, sc->sc_rxhdr_segment[slot], sc->sc_rxhdr_nseg[slot], sc->sc_rxhdr_dmamaps[slot], false);
 		virtio_enqueue(vsc, vq, slot, sc->sc_rx_segment[slot], sc->sc_rx_nseg[slot], sc->sc_rx_dmamaps[slot], false);
 
 		virtio_enqueue_commit(vsc, vq, slot, false);
