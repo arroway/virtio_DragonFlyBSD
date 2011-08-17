@@ -1049,7 +1049,8 @@ vioif_populate_rx_mbufs(struct vioif_softc *sc)
 	for (i = 0; i < vq->vq_num; i++) {
 		int slot;
 		r = virtio_enqueue_prep(vsc, vq, &slot);
-
+		//debug("slot: %d", slot);
+		
 		if (r == EAGAIN){
 			break;
 		}
@@ -1077,7 +1078,8 @@ vioif_populate_rx_mbufs(struct vioif_softc *sc)
 
 		bus_dmamap_sync(vsc->requests_dmat, sc->sc_rxhdr_dmamaps[slot], BUS_DMASYNC_PREREAD);
 		bus_dmamap_sync(vsc->requests_dmat, sc->sc_rx_dmamaps[slot], BUS_DMASYNC_PREREAD);
-
+		
+		//debug("slot: %d", slot);
 		virtio_enqueue(vsc, vq, slot, sc->sc_rxhdr_segment[slot], sc->sc_rxhdr_nseg[slot], sc->sc_rxhdr_dmamaps[slot], false);
 		virtio_enqueue(vsc, vq, slot, sc->sc_rx_segment[slot], sc->sc_rx_nseg[slot], sc->sc_rx_dmamaps[slot], false);
 
@@ -1337,20 +1339,20 @@ vioif_ctrl_rx(struct vioif_softc *sc, int cmd, bool onoff)
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_rx_dmamap,BUS_DMASYNC_PREWRITE);
 	bus_dmamap_sync(vsc->requests_dmat, sc->sc_ctrl_status_dmamap, BUS_DMASYNC_PREREAD);
 
-	debug("after bus_dmamap_sync\n");
+	debug("after bus_dmamap_sync");
 
 	debug("ctrl: vq_desc->addr: %08X", sc->sc_vq[CTRL_VQ].vq_desc->addr);
 
 	r = virtio_enqueue_prep(vsc, vq, &slot);
-
-	debug("after virtio_enqueue_prep\n");
+	
+//	debug("slot: %d", slot);
 
 	if (r != 0)
 		debug("%s: control virtqueue busy!?\n", device_get_name(sc->dev));
 
 	r = virtio_enqueue_reserve(vsc, vq, slot, 3);
 
-	debug("after virtio_enqueue_reserve\n");
+	debug("after virtio_enqueue_reserve");
 
 	if (r != 0)
 		debug("%s: control vq busy!?\n", device_get_name(sc->dev));

@@ -633,7 +633,8 @@ virtio_enqueue_reserve(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 		vd[i].flags = 0;
 		qe1->qe_next = 0;
 		
-		debug("indirect - qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
+		//debug("nsegs: %d", nsegs);
+		//debug("indirect - qe1->qe_desc_base->addr: %08X, len: %08X", vd->addr, vd->len);
 
 		return 0;
 	} else {
@@ -654,7 +655,8 @@ virtio_enqueue_reserve(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 		}
 		vd[s].flags = 0;
 
-		debug("direct - qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
+		//debug("nsegs: %d", nsegs);
+		//debug("qe1->qe_desc_base->addr: %08X, len: %08X", vd->addr, vd->len);
 
 		return 0;
 	}
@@ -702,8 +704,9 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	KKASSERT(s >= 0);
 	//debug("after KKASSERT");
 
-	debug("qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
-
+	//debug("qe1->qe_desc_base->addr: %08X, len: %08X", qe1->qe_desc_base->addr, qe1->qe_desc_base->len);
+	//debug("s: %d vd[s].len: %08X", slot, vd[s].len);
+	debug("slot: %d", slot);
 	for (i = 0; i < nseg; i++) {
 		//debug("in for loop");
 
@@ -721,7 +724,9 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	}
 
 	qe1->qe_next = s;
-	debug("qe1->qe_desc_base->addr: %08X", qe1->qe_desc_base->addr);
+	debug("qe1->qe_desc_base->addr: %08X, len: %08X", qe1->qe_desc_base->addr, qe1->qe_desc_base->len);
+	debug("vd[0].len: %08X", vd[0].len);
+	debug("&vq->vq_desc->addr: %08X, len: %08X", &vq->vq_desc->addr, &vq->vq_desc->len);
 	debug("out of virtio_enqueue");
 
 	return 0;
