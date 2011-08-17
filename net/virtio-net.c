@@ -328,7 +328,8 @@ vioif_down(struct ifnet *ifp, int disable)
 	if (vsc->sc_nvqs >= 3)
 		virtio_start_vq_intr(vsc, &sc->sc_vq[CTRL_VQ]);
 
-	virtio_reset(vsc);
+	/* Reseting twice is NOT nice */
+	//virtio_reset(vsc);
 	vioif_updown(sc, ifp, false);
 }
 
