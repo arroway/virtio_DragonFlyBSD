@@ -920,7 +920,7 @@ vioif_alloc_mems(struct vioif_softc *sc)
 		
 		}
 		if (sc->sc_ctrl_status_nseg != 1)
-			//debug("ctrl_status_segment: more than one segment");
+			debug("ctrl_status_segment: more than one segment");
 
 
 
