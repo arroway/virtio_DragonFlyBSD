@@ -857,7 +857,7 @@ vioif_alloc_mems(struct vioif_softc *sc)
 
 
 		dmamap_create(sc,
-				sc->sc_rx_dmamaps[i],
+				sc->sc_tx_dmamaps[i],
 				allocsize2,
 				"tx_payload");
 	}
