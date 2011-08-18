@@ -421,7 +421,7 @@ vioif_start(struct ifnet *ifp)
 		}
 
 
-		r = virtio_enqueue_reserve(vsc, vq, slot, sc->sc_tx_nseg[slot]);
+		r = virtio_enqueue_reserve(vsc, vq, slot, sc->sc_tx_nseg[slot] + sc->sc_txhdr_nseg[slot]);
 
 		if (r != 0) {
 
@@ -1070,7 +1070,7 @@ vioif_populate_rx_mbufs(struct vioif_softc *sc)
 		}
 
 		r = virtio_enqueue_reserve(vsc, vq, slot,
-					sc->sc_rx_nseg[slot] + 1);
+					sc->sc_rx_nseg[slot] + sc->sc_rx_rxhdr_nseg[slot]);
 
 		if (r != 0) {
 			vioif_free_rx_mbuf(sc, slot);
