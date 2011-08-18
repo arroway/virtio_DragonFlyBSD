@@ -1547,8 +1547,8 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 	r = bus_dmamap_load(vsc->requests_dmat,
 			sc->sc_ctrl_tbl_uc_dmamap,
 			&sc->sc_ctrl_mac_tbl_uc,
-			(sizeof(struct virtio_net_ctrl_mac_tbl)
-			+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_uc->nentries),
+			sizeof(struct virtio_net_ctrl_mac_tbl),
+			//+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_uc->nentries),
 			cmd_load_callback,
 			sc,
 			0);
@@ -1567,8 +1567,8 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 	r = bus_dmamap_load(vsc->requests_dmat,
 			sc->sc_ctrl_tbl_mc_dmamap,
 			&sc->sc_ctrl_mac_tbl_mc,
-			(sizeof(struct virtio_net_ctrl_mac_tbl)
-			+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_mc->nentries),
+			sizeof(struct virtio_net_ctrl_mac_tbl),
+			//+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_mc->nentries),
 			cmd_load_callback,
 			sc,
 			0);
