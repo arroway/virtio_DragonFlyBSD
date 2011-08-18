@@ -640,6 +640,7 @@ virtio_enqueue_reserve(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	} else {
 		vd = &vq->vq_desc[0];
 		qe1->qe_desc_base = vd;
+		/* Value of qe_index tab is zero for the qe1 when slot = 0 (see virtio_init_vq). */
 		qe1->qe_next = qe1->qe_index;
 		s = slot;
 		for (i = 0; i < nsegs - 1; i++) {
@@ -713,21 +714,24 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 		debug("i = %d, addr :%"PRIx64, i, (uint64_t)segs[i].ds_addr );
 		debug(" i = %d, len :%"PRIx64, i, (uint64_t)segs[i].ds_len );
 
+		/* For slot 0, s = qe1->qe_next = 0, cf virtio_enqueue_reserve */
 		vd[s].addr = segs[i].ds_addr;
 		vd[s].len = segs[i].ds_len;
 
 		if (!write)
 			vd[s].flags |= VRING_DESC_F_WRITE;
-		debug("s:%d addr:0x%"PRIx64" len:%"PRIu64, s, (uint64_t)vd[s].addr, (uint64_t)vd[s].len);
+		debug("s:%d addr:0x%"PRIx64" len:%"PRIu32, s, (uint64_t)vd[s].addr, (uint32_t)vd[s].len);
+		debug("s:%d &addr: %16X &len: %08X", s, &vd[s].addr, &vd[s].len);
 		s = vd[s].next;
 		debug("i = %d, next :%08X", i, vd[s].next );
 	}
 
-	qe1->qe_next = s;
-	debug("qe1->qe_desc_base->addr: %08X, len: %08X", qe1->qe_desc_base->addr, qe1->qe_desc_base->len);
-	debug("vd[0].len: %08X", vd[0].len);
-	debug("&vq->vq_desc->addr: %08X, len: %08X", &vq->vq_desc->addr, &vq->vq_desc->len);
+	debug("qe1->qe_desc_base->addr: %16X, len: %lu", qe1->qe_desc_base->addr, (unsigned long)qe1->qe_desc_base->len);
+	debug("qe1->qe_next: %d, vd[qe1->qe_next].addr: %16X, vd[qe1->qe_next].len: %lu", qe1->qe_next, vd[qe1->qe_next].addr, vd[qe1->qe_next].len);
+	debug("qe1->qe_next: %d, &vd[qe1->qe_next].addr: %16X, &vd[qe1->qe_next].len: %08X", qe1->qe_next, &vd[qe1->qe_next].addr, &vd[qe1->qe_next].len);
+	debug("&vq->vq_desc->addr: %16X, len: %lu", &vq->vq_desc->addr, (unsigned long)&vq->vq_desc->len);
 	debug("out of virtio_enqueue");
+	qe1->qe_next = s;
 
 	return 0;
 }
