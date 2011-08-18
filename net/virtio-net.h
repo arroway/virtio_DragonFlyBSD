@@ -263,6 +263,7 @@ struct vioif_softc {
 	bus_dma_segment_t 	*sc_segment_temp_tx; /* temp */
 
 	/* Transmission */
+	bus_dma_tag_t		sc_txbuf_dmat;
 	bus_dmamap_t 		*sc_tx_dmamaps;
 	int 				*sc_tx_nseg;
 	bus_dma_segment_t 	**sc_tx_segment;

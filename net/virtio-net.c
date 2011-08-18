@@ -357,7 +357,7 @@ vioif_start(struct ifnet *ifp)
 
 	m->m_len = m->m_pkthdr.len = MCLBYTES;*/
 
-	/*MGETHDR(m, M_RNOWAIT, MT_DATA);
+/*	MGETHDR(m, M_RNOWAIT, MT_DATA);
 	if (m == NULL)
 		return;
 
@@ -365,7 +365,9 @@ vioif_start(struct ifnet *ifp)
 	if ((m->m_flags & M_EXT) == 0) {
 		m_freem(m);
 		return;
-	}*/
+	}
+
+	m->m_len = m->m_pkthdr.len = m->m_ext.ext_size;*/
 
 	ASSERT_SERIALIZED(ifp->if_serializer);
 
@@ -394,19 +396,17 @@ vioif_start(struct ifnet *ifp)
 			break;
 		}
 
-		//debug("slot: %d", slot);
-
 		/* Maps mbuf chains*/
-	    r = bus_dmamap_load_mbuf(vsc->requests_dmat,
+	    	r = bus_dmamap_load_mbuf(sc->sc_txbuf_dmat,
 	    		sc->sc_tx_dmamaps[slot],
 	    		m,
 	    		tx_load_mbuf_callback,
 	    		sc,
 	    		0);
 
-	    //debug("error %d", r);
+	    	//debug("error %d", r);
 
-	    if (r != 0) {
+	        if (r != 0) {
 			virtio_enqueue_abort(vsc, vq, slot);
 			m_freem(m);
 			debug("tx dmamap load failed\n");
@@ -425,8 +425,8 @@ vioif_start(struct ifnet *ifp)
 
 		if (r != 0) {
 
-			bus_dmamap_sync(vsc->requests_dmat, sc->sc_tx_dmamaps[slot], BUS_DMASYNC_PREWRITE);
-			bus_dmamap_unload(vsc->requests_dmat, sc->sc_tx_dmamaps[slot]);
+			bus_dmamap_sync(sc->sc_txbuf_dmat, sc->sc_tx_dmamaps[slot], BUS_DMASYNC_PREWRITE);
+			bus_dmamap_unload(sc->sc_txbuf_dmat, sc->sc_tx_dmamaps[slot]);
 			ifp->if_flags |= IFF_OACTIVE;
 			vioif_tx_vq_done(vq);
 
@@ -445,8 +445,8 @@ vioif_start(struct ifnet *ifp)
 		sc->sc_tx_mbufs[slot] = m;
 		memset(&sc->sc_tx_hdrs[slot], 0, sizeof(struct virtio_net_hdr));
 
-		bus_dmamap_sync(vsc->requests_dmat, sc->sc_tx_dmamaps[slot], BUS_DMASYNC_PREWRITE);
-		bus_dmamap_sync(vsc->requests_dmat, sc->sc_txhdr_dmamaps[slot], BUS_DMASYNC_PREWRITE);
+		bus_dmamap_sync(sc->sc_txbuf_dmat, sc->sc_tx_dmamaps[slot], BUS_DMASYNC_PREWRITE);
+		bus_dmamap_sync(sc->sc_txbuf_dmat, sc->sc_txhdr_dmamaps[slot], BUS_DMASYNC_PREWRITE);
 
 		virtio_enqueue(vsc, vq, slot, sc->sc_txhdr_segment[slot],sc->sc_txhdr_nseg[slot], sc->sc_txhdr_dmamaps[slot], true);
 		virtio_enqueue(vsc, vq, slot, sc->sc_tx_segment[slot],sc->sc_tx_nseg[slot], sc->sc_tx_dmamaps[slot], true);
@@ -759,6 +759,23 @@ vioif_alloc_mems(struct vioif_softc *sc)
 		debug("DMA tag memory allocation failed, size %d, ""error code %d\n", allocsize, r);
 		goto err_none;
 	}
+	
+   	r = bus_dma_tag_create(NULL, 
+		1, 
+		0,
+		BUS_SPACE_MAXADDR,
+		BUS_SPACE_MAXADDR,
+		NULL, NULL,
+		32 * MCLBYTES,
+		32,
+		MCLBYTES,
+		0,
+		&sc->sc_txbuf_dmat);
+
+	if (r != 0){
+		debug("Tx DMA tag memory for allocation failed, size %d, ""error code %d\n", MCLBYTES, r);
+		goto err_none;
+	}
 
 	r = bus_dmamem_alloc(sc->sc_hdr_dmat,
 			&vaddr,
@@ -856,10 +873,12 @@ vioif_alloc_mems(struct vioif_softc *sc)
 
 
 
-		dmamap_create(sc,
-				sc->sc_tx_dmamaps[i],
-				allocsize2,
-				"tx_payload");
+		r = bus_dmamap_create(sc->sc_txbuf_dmat, BUS_DMA_NOWAIT|BUS_DMA_ALLOCNOW, &sc->sc_tx_dmamaps[i]);
+		
+		if (r !=0 ){
+			dmamap_error(sc, r, allocsize2, "tx_payload");
+		}
+		
 	}
 
 	//debug("after tx header allocation\n");
