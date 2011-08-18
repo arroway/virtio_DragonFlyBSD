@@ -277,8 +277,8 @@ tx_load_mbuf_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, bus
 	debug("nseg = %d", nseg);
 
 	for(i = 0; i<nseg ; i++){
-		sc->sc_segment_temp_rx[i] = segs[i]; /* Save segments information */
-		debug("seg %d len:%08X, sc->sc_segment_temp_rx[i].ds_len: %08X ", i, segs[i].ds_len, sc->sc_ctrl_segment_temp[i].ds_len);
+		sc->sc_segment_temp_tx[i] = segs[i]; /* Save segments information */
+		debug("seg %d len:%08X, sc->sc_segment_temp_tx[i].ds_len: %08X ", i, segs[i].ds_len, sc->sc_segment_temp_tx[i].ds_len);
 	}
 
     return;
@@ -415,11 +415,10 @@ vioif_start(struct ifnet *ifp)
 
 		sc->sc_tx_nseg[slot] = sc->sc_nseg_temp_tx;
 		debug("sc->sc_tx_nseg[slot]: %d", sc->sc_tx_nseg[slot]);
-		for (i=0; i< sc->sc_tx_nseg[slot]; i++){
-			sc->sc_tx_segment[slot][i] = sc->sc_segment_temp_tx[i];
-			debug("slot: %d seg %d sc->sc_tx_segment[slot][i].ds_len: %08X ", slot, i, sc->sc_tx_segment[slot][i].ds_len);
+		sc->sc_tx_segment[slot] = sc->sc_segment_temp_tx;
+		for (i=0; i<sc->sc_tx_nseg[slot]; i++){
+			debug("sc->sc_tx_segment[%d][%d].ds_len: %lu", slot, i, sc->sc_tx_segment[slot][i].ds_len);
 		}
-
 
 		r = virtio_enqueue_reserve(vsc, vq, slot, sc->sc_tx_nseg[slot] + sc->sc_txhdr_nseg[slot]);
 
@@ -659,22 +658,22 @@ vioif_alloc_mems(struct vioif_softc *sc)
 	MALLOC(sc->sc_rxhdr_nseg,int *,
 			(rxqsize * sizeof(int)), M_DEVBUF, M_ZERO);
 	MALLOC(sc->sc_txhdr_nseg, int *,
-			(rxqsize * sizeof(int)), M_DEVBUF, M_ZERO);
+			(txqsize * sizeof(int)), M_DEVBUF, M_ZERO);
 
 	/* allocation for later use in vioif_populate_rx_mbufs */
 	MALLOC(sc->sc_rx_nseg, int *,
 			(rxqsize * sizeof(int)), M_DEVBUF, M_ZERO);
 	MALLOC(sc->sc_tx_nseg, int *,
-			(rxqsize * sizeof(int)), M_DEVBUF, M_ZERO);
+			(txqsize * sizeof(int)), M_DEVBUF, M_ZERO);
 
 	/* Dynamically allocate memory to save information about segments
 	 *  of bus_dmamap_t structures */
 	MALLOC(sc->sc_rxhdr_segment,
 			bus_dma_segment_t **,
-			rxqsize * sizeof(bus_dma_segment_t *), M_DEVBUF, M_ZERO);
+			txqsize * sizeof(bus_dma_segment_t *), M_DEVBUF, M_ZERO);
 	MALLOC(sc->sc_txhdr_segment,
 			bus_dma_segment_t **,
-			(rxqsize * sizeof(bus_dma_segment_t *)), M_DEVBUF, M_ZERO);
+			(txqsize * sizeof(bus_dma_segment_t *)), M_DEVBUF, M_ZERO);
 
 	/* allocation for later use in vioif_populate_rx_mbufs */
 	MALLOC(sc->sc_rx_segment,
@@ -682,7 +681,7 @@ vioif_alloc_mems(struct vioif_softc *sc)
 			(rxqsize * sizeof(bus_dma_segment_t *)), M_DEVBUF, M_ZERO);
 	MALLOC(sc->sc_tx_segment,
 			bus_dma_segment_t **,
-			(rxqsize * sizeof(bus_dma_segment_t *)), M_DEVBUF, M_ZERO);
+			(txqsize * sizeof(bus_dma_segment_t *)), M_DEVBUF, M_ZERO);
 
 	MALLOC(sc->sc_ctrl_cmd_segment,
 			bus_dma_segment_t *,
@@ -709,7 +708,7 @@ vioif_alloc_mems(struct vioif_softc *sc)
 			(rxqsize * sizeof(bus_dma_segment_t)), M_DEVBUF, M_ZERO);
 	MALLOC(sc->sc_segment_temp_tx,
 			bus_dma_segment_t *,
-			(rxqsize * sizeof(bus_dma_segment_t)), M_DEVBUF, M_ZERO);
+			(txqsize * sizeof(bus_dma_segment_t)), M_DEVBUF, M_ZERO);
 	MALLOC(sc->sc_ctrl_segment_temp,
 			bus_dma_segment_t *,
 			(2 * sizeof(bus_dma_segment_t)), M_DEVBUF, M_ZERO);
