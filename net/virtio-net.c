@@ -61,6 +61,7 @@
 #include <net/if_arp.h>
 #include <net/if_var.h>
 #include <net/if_types.h>
+#include <net/if_media.h>
 
 #include <sys/spinlock.h>
 #include <sys/spinlock2.h>
@@ -75,6 +76,7 @@
 #include <cpu/i386/include/atomic.h>
 #endif
 
+#include <dev/netif/mii_layer/miivar.h>
 #include <dev/virtio/virtiovar.h>
 #include <dev/virtio/virtioreg.h>
 #include <dev/virtio/net/virtio-net.h>
@@ -471,20 +473,40 @@ vioif_start(struct ifnet *ifp)
 	}
 }
 
+
+static int change_callback(struct ifp* ifp)
+{
+	return 0;	
+}
+
+static void status_callback()
+{
+	return ;
+}
+
 /* 	ifp->if_ioctl  */
 static int
 vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data, struct ucred *cr)
 {
 	struct vioif_softc *sc = ifp->if_softc;
+	struct mii_data *mii = device_get_softc(ifp->if_softc);
+	struct ifreq *ifr;
+	struct ifmedia *ifm;
 	int r = 0;
 
 	ASSERT_SERIALIZED(ifp->if_serializer);
 
+	ifr = (struct ifreq *) data;
+	ifmedia_init(ifm, IFM_IMASK /* don't care mask*/, change_callback, status_callback);
+
+
 	switch (cmd) {
 	case SIOCGIFMEDIA:
 	case SIOCSIFMEDIA:
-		r = EOPNOTSUPP;
-		/* XXX: implement this :) */
+		mii->mii_media_status = IFM_ACTIVE;
+		mii->mii_media = *ifm;
+		
+		r = ifmedia_ioctl(ifp, ifr, &mii->mii_media, cmd);
 		break;
 
 	case SIOCSIFFLAGS:

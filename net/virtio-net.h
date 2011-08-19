@@ -195,7 +195,6 @@ struct vioif_softc {
 	uint8_t 		sc_mac[ETHER_ADDR_LEN];
 	struct arpcom 	sc_arpcom;
 
-
 	/* Headers preceeding packets placed in the transmitting
 	 * or receiving queue */
 	bus_dma_tag_t 			sc_hdr_dmat;
