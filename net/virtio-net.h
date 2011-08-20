@@ -194,6 +194,7 @@ struct vioif_softc {
 	short 			sc_ifflags;
 	uint8_t 		sc_mac[ETHER_ADDR_LEN];
 	struct arpcom 	sc_arpcom;
+	struct ifmedia 	sc_ifm;	
 
 	/* Headers preceeding packets placed in the transmitting
 	 * or receiving queue */

@@ -138,7 +138,8 @@ static void txhdr_load_callback(void *, bus_dma_segment_t *, int, int);
 static void cmd_load_callback(void *, bus_dma_segment_t *, int, int);
 static void rx_load_mbuf_callback(void *, bus_dma_segment_t *, int, bus_size_t, int);
 static void tx_load_mbuf_callback(void *, bus_dma_segment_t *, int, bus_size_t, int);
-
+static int ifm_change_callback(struct ifnet *);
+static void ifm_status_callback(struct ifnet *, struct ifmediareq *);
 
 /* Callback function for rx header */
 static void
@@ -474,14 +475,16 @@ vioif_start(struct ifnet *ifp)
 }
 
 
-static int change_callback(struct ifp* ifp)
+static int ifm_change_callback(struct ifnet* ifp)
 {
+	ASSERT_SERIALIZED(ifp->if_serializer);
 	return 0;	
 }
 
-static void status_callback()
+static void ifm_status_callback(struct ifnet *ifp, struct ifmediareq *ifmr)
 {
-	return ;
+	ASSERT_SERIALIZED(ifp->if_serializer);
+	ifmr->ifm_active = IFM_ETHER|IFM_1000_T;
 }
 
 /* 	ifp->if_ioctl  */
@@ -489,24 +492,22 @@ static int
 vioif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data, struct ucred *cr)
 {
 	struct vioif_softc *sc = ifp->if_softc;
-	struct mii_data *mii = device_get_softc(ifp->if_softc);
+	//struct mii_data *mii = device_get_softc(ifp->if_softc);
 	struct ifreq *ifr;
-	struct ifmedia *ifm;
+	//struct ifmedia *ifm;
 	int r = 0;
 
 	ASSERT_SERIALIZED(ifp->if_serializer);
 
 	ifr = (struct ifreq *) data;
-	ifmedia_init(ifm, IFM_IMASK /* don't care mask*/, change_callback, status_callback);
-
 
 	switch (cmd) {
 	case SIOCGIFMEDIA:
 	case SIOCSIFMEDIA:
-		mii->mii_media_status = IFM_ACTIVE;
-		mii->mii_media = *ifm;
+		//mii->mii_media_status = IFM_ACTIVE;
+		//mii->mii_media = *ifm;
 		
-		r = ifmedia_ioctl(ifp, ifr, &mii->mii_media, cmd);
+		r = ifmedia_ioctl(ifp, ifr, &sc->sc_ifm, cmd);
 		break;
 
 	case SIOCSIFFLAGS:
@@ -2042,6 +2043,13 @@ vioif_attach(device_t dev)
 	//debug("after vioif_alloc_mems \n");
 
 
+	/* There is no MII or real PHY */
+	ifmedia_init(&sc->sc_ifm, 0 /*don't care mask*/, 
+		ifm_change_callback, ifm_status_callback);
+
+	ifmedia_add(&sc->sc_ifm, IFM_ETHER|IFM_1000_T, 0, NULL);
+	ifmedia_set(&sc->sc_ifm, IFM_ETHER|IFM_1000_T);
+
 	/* Interface for the device switch */
 	kprintf("\ndevice name %s\n", device_get_name(dev));
 	if_initname(ifp, device_get_name(dev), device_get_unit(dev));
@@ -2059,6 +2067,7 @@ vioif_attach(device_t dev)
 	ifq_set_maxlen(&ifp->if_snd, 1);
 	ifq_set_ready(&ifp->if_snd);
 
+	/* Attach the interface */
 	ether_ifattach(ifp, sc->sc_mac, &sc->sc_serializer);
 	//ifp->if_serializer = &sc->sc_serializer;
 	debug("ether_ifattach");
