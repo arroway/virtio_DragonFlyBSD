@@ -119,6 +119,8 @@ First unmount the block device, or it will freeze the session and you'll have to
 
 * Memory Ballooning
 
+-balloon virtio
+
 You can use memory ballooning to over-commit the memory resources of a guest operating system. The hypervisor may asks for some memory to the guest OS (i.e. to deflate its "balloon" of memory"). 
 
 Interesting information there: http://publib.boulder.ibm.com/infocenter/lnxinfo/v3r0m0/index.jsp?topic=/liaat/liaatbpballooning.htm
