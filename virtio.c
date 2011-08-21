@@ -959,8 +959,13 @@ virtio_attach(device_t dev)
 
 	if (virtio_type == PCI_PRODUCT_VIRTIO_NETWORK) {
 		child = device_add_child(dev, "virtio_net",0);
+
 	} else if (virtio_type == PCI_PRODUCT_VIRTIO_BLOCK) {
 		child = device_add_child(dev, "virtio_blk",0);
+
+	} else if (virtio_type == PCI_PRODUCT_VIRTIO_BALLOON){
+		child = device_add_child(dev, "virtio_mb", 0);
+
 	} else {
 		kprintf("Dev %s not supported\n",
 			virtio_device_name[virtio_type]); 
