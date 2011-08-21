@@ -1,5 +1,3 @@
-/*change cv* and in sleep, msg < 6 char */
-
 /* $NetBSD$	*/
 
 /*
@@ -350,33 +348,12 @@ vioif_start(struct ifnet *ifp)
 	int retry = 0;
 	int slot, r, i;
 
-	/* Allocate an mbuf and initialize it to contain internal data */
-	//MGET(m, MB_WAIT, ? );
-	/* Allocate and attach an mbuf cluster to an mbuf. */
-	/*MCLGET(m, MB_WAIT);
-
-	if (m == NULL)
-		return ENOBUFS;
-
-	m->m_len = m->m_pkthdr.len = MCLBYTES;*/
-
-/*	MGETHDR(m, M_RNOWAIT, MT_DATA);
-	if (m == NULL)
-		return;
-
-	MCLGET(m, M_RNOWAIT);
-	if ((m->m_flags & M_EXT) == 0) {
-		m_freem(m);
-		return;
-	}
-
-	m->m_len = m->m_pkthdr.len = m->m_ext.ext_size;*/
 
 	ASSERT_SERIALIZED(ifp->if_serializer);
 
 	if ((ifp->if_flags & (IFF_RUNNING|IFF_OACTIVE)) != IFF_RUNNING)
 		return;
-
+	
 	queued = 0;
 
 	while ((m = ifq_poll(&ifp->if_snd)) != NULL) {
@@ -1976,8 +1953,7 @@ vioif_attach(device_t dev)
 	sc->sc_vq[TX_VQ].vq_done = vioif_tx_vq_done; /* tx interrupt*/
 
 	virtio_start_vq_intr(vsc, &sc->sc_vq[RX_VQ]);
-	virtio_stop_vq_intr(vsc, &sc->sc_vq[TX_VQ]);
-
+	virtio_stop_vq_intr(vsc, &sc->sc_vq[RX_VQ]);
 
 	/* Virtqueue allocation for the ctrl queue */
 	if ((features & VIRTIO_NET_F_CTRL_VQ) && (features & VIRTIO_NET_F_CTRL_RX)){ /* rx & ctrl queues */

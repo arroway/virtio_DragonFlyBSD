@@ -549,8 +549,9 @@ notify:
 				  BUS_SPACE_BARRIER_READ);
 		//debug("after bus_space_barrier\n");
 
-
-		if (!(vq->vq_used->flags & VRING_USED_F_NO_NOTIFY)) {
+		/*if quemu set it to no_notify, then we have to wait that the guest is out of buffers
+		to notify the host ---> what did qemu ?*/
+		/*if (!(vq->vq_used->flags & VRING_USED_F_NO_NOTIFY)) {*/
 
 			//debug("in if\n");
 			debug("processing vq (used_idx vs idx) = (%d vs %d)\n", vq->vq_used_idx, vq->vq_used->idx);
@@ -560,7 +561,7 @@ notify:
 					  VIRTIO_CONFIG_QUEUE_NOTIFY,
 					  vq->vq_index);
 								
-		}
+		//}
 	}
 	spin_unlock(&vq->vq_aring_lock);
 	debug("processing vq (used_idx vs idx) = (%d vs %d)\n", vq->vq_used_idx, vq->vq_used->idx);
