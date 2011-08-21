@@ -87,7 +87,7 @@
 #define VIRTIO_CONFIG_DEVICE_STATUS_RESET	0
 #define VIRTIO_CONFIG_DEVICE_STATUS_ACK		1
 #define VIRTIO_CONFIG_DEVICE_STATUS_DRIVER	2
-#define VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK	4
+#define VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK	4	/* In qemu, it's called "VIRTIO_CONFIF_S_DRIVER_OK" */
 #define VIRTIO_CONFIG_DEVICE_STATUS_FAILED	128
 #define VIRTIO_CONFIG_ISR_STATUS		19 /* 8bit */
 #define VIRTIO_CONFIG_ISR_CONFIG_CHANGE		2
@@ -127,6 +127,7 @@
  * These can chain together via "next". 
  */ 
 struct vring_desc {
+
 	u_int64_t	addr;	/* Address (guest-physical). */
 	u_int32_t	len;	/* Length. */
 	u_int16_t	flags;	/* The flags as indicated above. */

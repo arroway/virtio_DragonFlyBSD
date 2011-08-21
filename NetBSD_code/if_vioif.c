@@ -895,7 +895,7 @@ vioif_rx_deq(struct vioif_softc *sc)
 
 /* rx interrupt; call _dequeue above and schedule a softint */
 static int
-vioif_rx_vq_done(struct virtqueue *vq)
+vioif_rx_vq_done()
 {
 	struct virtio_softc *vsc = vq->vq_owner;
 	struct vioif_softc *sc = device_private(vsc->sc_child);
@@ -910,7 +910,7 @@ vioif_rx_vq_done(struct virtqueue *vq)
 
 /* softint: enqueue recieve requests for new incoming packets */
 static void
-vioif_rx_softint(void *arg)
+	(void *arg)
 {
 	struct vioif_softc *sc = arg;
 
@@ -963,7 +963,7 @@ vioif_tx_vq_done(struct virtqueue *vq)
 		bus_dmamap_unload(vsc->sc_dmat, sc->sc_tx_dmamaps[slot]);
 		sc->sc_tx_mbufs[slot] = 0;
 		virtio_dequeue_commit(vsc, vq, slot);
-		ifp->if_opackets++;
+		ifp->i++;
 		m_freem(m);
 	}
 
