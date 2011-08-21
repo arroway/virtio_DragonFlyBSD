@@ -64,7 +64,7 @@
 #define _VIRTIOVAR_H_
 
 /* change to VIRTIO_DEBUG for dmesg info*/
-#define VIRTIO_DEBUG
+#define NO_VIRTIO_DEBUG
 
 #ifdef VIRTIO_DEBUG 
 	#define debug(fmt, ...) do { kprintf("%s: " fmt "\n", __func__ , ##__VA_ARGS__); } \
