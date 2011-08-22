@@ -152,8 +152,8 @@ rxhdr_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int e
 		return;
 	}
 
-	sc->sc_vq[RX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
-	debug("rx: vq_desc->addr: %08X", sc->sc_vq[RX_VQ].vq_desc->addr);
+	//sc->sc_vq[RX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
+	//debug("rx: vq_desc->addr: %08X", sc->sc_vq[RX_VQ].vq_desc->addr);
 
 	/* Temporarily save information there */
 	sc->sc_nseg_temp_rx = nseg; /* How much segments there is */
@@ -180,8 +180,8 @@ txhdr_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int e
 		return;
 	}
 
-	sc->sc_vq[TX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
-	debug("tx: vq_desc->addr: %08X", sc->sc_vq[TX_VQ].vq_desc->addr);
+	//sc->sc_vq[TX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
+	//debug("tx: vq_desc->addr: %08X", sc->sc_vq[TX_VQ].vq_desc->addr);
 	
 
 	/* Temporarily save information there */
@@ -209,8 +209,8 @@ cmd_load_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, int err
 		return;
 	}
 
-	sc->sc_vq[CTRL_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
-	debug("ctrl: vq_desc->addr: %08X", sc->sc_vq[CTRL_VQ].vq_desc->addr);
+//	sc->sc_vq[CTRL_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
+//	debug("ctrl: vq_desc->addr: %08X", sc->sc_vq[CTRL_VQ].vq_desc->addr);
 
 
 	/* Temporarily save information there */
@@ -240,8 +240,8 @@ rx_load_mbuf_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, bus
 		return;
 	}
 
-	sc->sc_vq[RX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
-	debug("vq_desc->addr = %08X ", sc->sc_vq[RX_VQ].vq_desc->addr);
+	//sc->sc_vq[RX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
+	//debug("vq_desc->addr = %08X ", sc->sc_vq[RX_VQ].vq_desc->addr);
 
 	/* Temporarily save information there */
 	sc->sc_nseg_temp_rx = nseg; /* How much segments there is */
@@ -270,8 +270,8 @@ tx_load_mbuf_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, bus
 		return;
 	}
 
-	sc->sc_vq[TX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
-	debug("tx mbuf: vq_desc->addr: %08X", sc->sc_vq[TX_VQ].vq_desc->addr);
+	//sc->sc_vq[TX_VQ].vq_desc->addr = segs->ds_addr; /* Save physical address */
+	//debug("tx mbuf: vq_desc->addr: %08X", sc->sc_vq[TX_VQ].vq_desc->addr);
 
 	/* Temporarily save information there */
 	sc->sc_nseg_temp_tx = nseg; /* How much segments there is */
@@ -285,21 +285,24 @@ tx_load_mbuf_callback(void *callback_arg, bus_dma_segment_t *segs, int nseg, bus
     return;
 }
 
-/* 	ifp->if_init  */
+
 static void
 vioif_init(void *arg)
 {
 	//debug("call");
 	struct ifnet *ifp = arg;
 	struct vioif_softc *sc = ifp->if_softc;
+	struct virtio_softc *vsc = sc->sc_virtio;
 
 	vioif_down(ifp, 0);
-	vioif_populate_rx_mbufs(sc);
+	virtio_reinit_end(vsc);
+	///vioif_populate_rx_mbufs(sc);
 	vioif_updown(sc, ifp, true);
 
 	ifp->if_flags |= IFF_RUNNING;
 	ifp->if_flags &= ~IFF_OACTIVE;
-
+	
+	vioif_populate_rx_mbufs(sc);
 	vioif_rx_filter(sc);
 
 }
@@ -311,6 +314,7 @@ vioif_down(struct ifnet *ifp, int disable)
 	struct vioif_softc *sc = ifp->if_softc;
 	struct virtio_softc *vsc = sc->sc_virtio;
 
+	debug("virtio_reset");
 	virtio_reset(vsc);
 	vioif_rx_deq(sc);
 	vioif_tx_drain(sc);
@@ -399,6 +403,10 @@ vioif_start(struct ifnet *ifp)
 		for (i=0; i<sc->sc_tx_nseg[slot]; i++){
 			debug("sc->sc_tx_segment[%d][%d].ds_len: %lu", slot, i, sc->sc_tx_segment[slot][i].ds_len);
 		}
+		
+		sc->sc_vq[TX_VQ].vq_desc[slot].addr = 	sc->sc_tx_segment[slot]->ds_addr; /* Save physical address */
+		debug("tx mbuf: sc->sc_vq[TX_VQ].vq_desc[%d].addr: %08X", slot, sc->sc_vq[TX_VQ].vq_desc[slot].addr);
+		
 
 		r = virtio_enqueue_reserve(vsc, vq, slot, sc->sc_tx_nseg[slot] + sc->sc_txhdr_nseg[slot]);
 
@@ -540,7 +548,6 @@ vioif_updown(struct vioif_softc *sc, struct ifnet *ifp, bool isup)
 		ifp->if_link_state = (isup) ? LINK_STATE_UP : LINK_STATE_DOWN;
 		if_link_state_change(ifp);
 	}
-
 	return 0;
 }
 
@@ -842,6 +849,9 @@ vioif_alloc_mems(struct vioif_softc *sc)
 		sc->sc_rxhdr_nseg[i] = sc->sc_nseg_temp_rx;
 		sc->sc_rxhdr_segment[i] = sc->sc_segment_temp_rx;
 
+		sc->sc_vq[RX_VQ].vq_desc[i].addr = sc->sc_rxhdr_segment[i]->ds_addr; /* Save physical address */
+		debug("sc_vq[RX_VQ].vq_desc[%d].addr = %08X ", i, sc->sc_vq[RX_VQ].vq_desc[i].addr);
+				
 
 		dmamap_create(sc,
 				sc->sc_rx_dmamaps[i],
@@ -857,7 +867,7 @@ vioif_alloc_mems(struct vioif_softc *sc)
 		/* tx header */
 		r = bus_dmamap_load(vsc->requests_dmat,
 				sc->sc_txhdr_dmamaps[i],
-				&sc->sc_hdrs[i],
+				&sc->sc_tx_hdrs[i],
 				sizeof(struct virtio_net_hdr),
 				txhdr_load_callback,
 				sc,
@@ -870,6 +880,8 @@ vioif_alloc_mems(struct vioif_softc *sc)
 		sc->sc_txhdr_segment[i] = sc->sc_segment_temp_tx;
 	//	debug("sc->sc_txhdr_segment len: %d ", sc->sc_txhdr_segment[i].ds_len);
 
+		sc->sc_vq[TX_VQ].vq_desc[i].addr = sc->sc_txhdr_segment[i]->ds_addr; /* Save physical address */
+		debug("sc_vq[TX_VQ].vq_desc[%d].addr = %08X ", i, sc->sc_vq[TX_VQ].vq_desc[i].addr);
 
 
 		r = bus_dmamap_create(sc->sc_txbuf_dmat, BUS_DMA_NOWAIT|BUS_DMA_ALLOCNOW, &sc->sc_tx_dmamaps[i]);
@@ -907,6 +919,9 @@ vioif_alloc_mems(struct vioif_softc *sc)
 		for ( i=0; i< sc->sc_ctrl_cmd_nseg; i++){
 			sc->sc_ctrl_cmd_segment[i] = sc->sc_ctrl_segment_temp[i];
 			//debug("sc->sc_ctrl_cmd_segment len: %d ", sc->sc_ctrl_cmd_segment[i].ds_len);
+
+			sc->sc_vq[CTRL_VQ].vq_desc[i].addr = sc->sc_ctrl_cmd_segment[i].ds_addr; /* Save physical address */
+			debug("ctrl: sc->sc_vq[CTRL_VQ].vq_desc[%d].addr: %08X", i, sc->sc_vq[CTRL_VQ].vq_desc[i].addr);
 		}
 
 		if (sc->sc_ctrl_cmd_nseg != 1)
@@ -935,6 +950,8 @@ vioif_alloc_mems(struct vioif_softc *sc)
 		for (i=0; i < sc->sc_ctrl_status_nseg; i++){
 			sc->sc_ctrl_status_segment[i] = sc->sc_ctrl_segment_temp[i];
 			//debug("seg %d sc->sc_ctrl_status_segment[i].ds_len: %08X ", i,sc->sc_ctrl_status_segment[i].ds_len);
+			sc->sc_vq[CTRL_VQ].vq_desc[i].addr = sc->sc_ctrl_status_segment[i].ds_addr; /* Save physical address */
+			debug("ctrl: sc->sc_vq[CTRL_VQ].vq_desc[%d].addr: %08X", i, sc->sc_vq[CTRL_VQ].vq_desc[i].addr);
 		
 		}
 		if (sc->sc_ctrl_status_nseg != 1)
@@ -961,6 +978,9 @@ vioif_alloc_mems(struct vioif_softc *sc)
 
 		for (i=0; i < sc->sc_ctrl_rx_nseg; i++){
 			sc->sc_ctrl_rx_segment[i] = sc->sc_ctrl_segment_temp[i];
+			
+			sc->sc_vq[CTRL_VQ].vq_desc[i].addr = sc->sc_ctrl_rx_segment[i].ds_addr; /* Save physical address */
+			debug("ctrl: sc->sc_vq[CTRL_VQ].vq_desc[%d]->addr: %08X", i, sc->sc_vq[CTRL_VQ].vq_desc[i].addr);
 		}
 		if (sc->sc_ctrl_rx_nseg != 1)
 			debug("ctrl_rx_segment: more than one segment");
@@ -1034,6 +1054,9 @@ vioif_add_rx_mbuf(struct vioif_softc *sc, int i)
 
 	sc->sc_rx_nseg[i] = sc->sc_nseg_temp_rx;
 	sc->sc_rx_segment[i] = sc->sc_segment_temp_rx;
+	
+	sc->sc_vq[RX_VQ].vq_desc[i].addr = sc->sc_rx_segment[i]->ds_addr; /* Save physical address */
+	debug("sc->sc_vq[RX_VQ].vq_desc[%d]->addr = %08X ", i, sc->sc_vq[RX_VQ].vq_desc[i].addr);
 
 	if (r) {
 		m_freem(m);
@@ -1565,8 +1588,8 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 	r = bus_dmamap_load(vsc->requests_dmat,
 			sc->sc_ctrl_tbl_uc_dmamap,
 			&sc->sc_ctrl_mac_tbl_uc,
-			sizeof(struct virtio_net_ctrl_mac_tbl),
-			//+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_uc->nentries),
+			(sizeof(struct virtio_net_ctrl_mac_tbl)
+			+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_uc->nentries),
 			cmd_load_callback,
 			sc,
 			0);
@@ -1580,13 +1603,15 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 
 	for (i=0; i < sc->sc_ctrl_uc_nseg; i++){
 		sc->sc_ctrl_uc_segment[i] = sc->sc_ctrl_segment_temp[i];
+		sc->sc_vq[CTRL_VQ].vq_desc[i].addr = sc->sc_ctrl_uc_segment[i].ds_addr; /* Save physical address */
+		debug("ctrl: sc->sc_vq[CTRL_VQ].vq_desc[%d]->addr: %08X", i, sc->sc_vq[CTRL_VQ].vq_desc[i].addr);
 	}
 
 	r = bus_dmamap_load(vsc->requests_dmat,
 			sc->sc_ctrl_tbl_mc_dmamap,
 			&sc->sc_ctrl_mac_tbl_mc,
-			sizeof(struct virtio_net_ctrl_mac_tbl),
-			//+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_mc->nentries),
+			(sizeof(struct virtio_net_ctrl_mac_tbl)
+			+ ETHER_ADDR_LEN * sc->sc_ctrl_mac_tbl_mc->nentries),
 			cmd_load_callback,
 			sc,
 			0);
@@ -1601,6 +1626,10 @@ vioif_set_rx_filter(struct vioif_softc *sc)
 
 	for (i=0; i < sc->sc_ctrl_mc_nseg; i++){
 		sc->sc_ctrl_mc_segment[i] = sc->sc_ctrl_segment_temp[i];
+		
+		sc->sc_vq[CTRL_VQ].vq_desc[i].addr = sc->sc_ctrl_mc_segment[i].ds_addr; /* Save physical address */
+		debug("ctrl: sc->sc_vq[CTRL_VQ].vq_desc[%d]->addr: %08X", i, sc->sc_vq[CTRL_VQ].vq_desc[i].addr);
+		
 	}
 
 
@@ -2073,6 +2102,7 @@ vioif_attach(device_t dev)
 	//debug("serialize_enter");
 
 	//kprintf("%s","CONFIG_DEVICE_STATUS_DRIVER");
+	debug("VIRTIO SET STATUS DRIVER_OK");
 	virtio_set_status(vsc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK);
 
 	lwkt_serialize_exit(&sc->sc_serializer);
@@ -2186,6 +2216,7 @@ vioif_detach(device_t dev)
 
 	bus_dma_tag_destroy(vsc->requests_dmat);
 
+	debug("virtio_reset");
 	virtio_reset(vsc);
 	//virtio_free_vq(vsc, &vsc->sc_vqs[numq]); in vioif_destroy_vq
 

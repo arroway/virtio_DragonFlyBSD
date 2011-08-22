@@ -91,12 +91,12 @@ static int              virtio_attach(device_t dev);
 
 void virtio_set_status(struct virtio_softc *sc, int status)
 {
-	//debug("call");
 	int old = 0;
 
 	if (status != 0)
 		old = bus_space_read_1(sc->sc_iot, sc->sc_ioh,
 				       VIRTIO_CONFIG_DEVICE_STATUS);
+	debug("set a new status: old status: %d, new status: %d", old, status);
 
 	bus_space_write_1(sc->sc_iot, sc->sc_ioh, VIRTIO_CONFIG_DEVICE_STATUS,
 			  status|old);
@@ -118,6 +118,7 @@ void
 virtio_reset(struct virtio_softc *sc)
 {
 	//debug("call");
+	debug("virtio_device_reset");
 	virtio_device_reset(sc);
 }
 
@@ -141,7 +142,7 @@ virtio_reinit_start(struct virtio_softc *sc)
 {
 	//debug("call");
 	int i;
-
+	debug("virtio_set_status twice");
 	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_ACK);
 	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER);
 	for (i = 0; i < sc->sc_nvqs; i++) {
@@ -169,7 +170,7 @@ virtio_reinit_start(struct virtio_softc *sc)
 void
 virtio_reinit_end(struct virtio_softc *sc)
 {
-	//debug("call");
+	debug("call virtio_set_status");
 	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK);
 }
 
@@ -700,7 +701,7 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 	int i;
 	int s = qe1->qe_next;
 
-	print_backtrace(5);
+	//print_backtrace(5);
 	//debug("enter virtio_enqueue");
 
 	KKASSERT(s >= 0);
@@ -708,12 +709,12 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 
 	//debug("qe1->qe_desc_base->addr: %08X, len: %08X", qe1->qe_desc_base->addr, qe1->qe_desc_base->len);
 	//debug("s: %d vd[s].len: %08X", slot, vd[s].len);
-	debug("slot: %d", slot);
+	//debug("slot: %d", slot);
 	for (i = 0; i < nseg; i++) {
 		//debug("in for loop");
 
-		debug("i = %d, addr :%"PRIx64, i, (uint64_t)segs[i].ds_addr );
-		debug(" i = %d, len :%"PRIx64, i, (uint64_t)segs[i].ds_len );
+		//debug("i = %d, addr :%"PRIx64, i, (uint64_t)segs[i].ds_addr );
+		//debug(" i = %d, len :%"PRIx64, i, (uint64_t)segs[i].ds_len );
 
 		/* For slot 0, s = qe1->qe_next = 0, cf virtio_enqueue_reserve */
 		vd[s].addr = segs[i].ds_addr;
@@ -721,17 +722,17 @@ virtio_enqueue(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 
 		if (!write)
 			vd[s].flags |= VRING_DESC_F_WRITE;
-		debug("s:%d addr:0x%"PRIx64" len:%"PRIu32, s, (uint64_t)vd[s].addr, (uint32_t)vd[s].len);
-		debug("s:%d &addr: %16X &len: %08X", s, &vd[s].addr, &vd[s].len);
+		//debug("s:%d addr:0x%"PRIx64" len:%"PRIu32, s, (uint64_t)vd[s].addr, (uint32_t)vd[s].len);
+		//debug("s:%d &addr: %16X &len: %08X", s, &vd[s].addr, &vd[s].len);
 		s = vd[s].next;
-		debug("i = %d, next :%08X", i, vd[s].next );
+		//debug("i = %d, next :%08X", i, vd[s].next );
 	}
 
-	debug("qe1->qe_desc_base->addr: %16X, len: %lu", qe1->qe_desc_base->addr, (unsigned long)qe1->qe_desc_base->len);
-	debug("qe1->qe_next: %d, vd[qe1->qe_next].addr: %16X, vd[qe1->qe_next].len: %lu", qe1->qe_next, vd[qe1->qe_next].addr, vd[qe1->qe_next].len);
-	debug("qe1->qe_next: %d, &vd[qe1->qe_next].addr: %16X, &vd[qe1->qe_next].len: %08X", qe1->qe_next, &vd[qe1->qe_next].addr, &vd[qe1->qe_next].len);
-	debug("&vq->vq_desc->addr: %16X, len: %lu", &vq->vq_desc->addr, (unsigned long)&vq->vq_desc->len);
-	debug("out of virtio_enqueue");
+	//debug("qe1->qe_desc_base->addr: %16X, len: %lu", qe1->qe_desc_base->addr, (unsigned long)qe1->qe_desc_base->len);
+	//debug("qe1->qe_next: %d, vd[qe1->qe_next].addr: %16X, vd[qe1->qe_next].len: %lu", qe1->qe_next, vd[qe1->qe_next].addr, vd[qe1->qe_next].len);
+//	debug("qe1->qe_next: %d, &vd[qe1->qe_next].addr: %16X, &vd[qe1->qe_next].len: %08X", qe1->qe_next, &vd[qe1->qe_next].addr, &vd[qe1->qe_next].len);
+	//debug("&vq->vq_desc->addr: %16X, len: %lu", &vq->vq_desc->addr, (unsigned long)&vq->vq_desc->len);
+	//debug("out of virtio_enqueue");
 	qe1->qe_next = s;
 
 	return 0;
@@ -1015,8 +1016,10 @@ virtio_attach(device_t dev)
 		kprintf("Couldn't setup intr\n");
 		return(1);
 	}
-
+	
+	debug("virtio_reset");
 	virtio_device_reset(sc);
+	debug("virtio_set_status");
 	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_ACK);
 	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER);
 
