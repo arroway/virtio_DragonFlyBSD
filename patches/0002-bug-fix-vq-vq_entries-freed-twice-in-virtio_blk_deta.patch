@@ -1,0 +1,54 @@
+From 464fd12eb65af3d2059ccce55dafe4893f57077f Mon Sep 17 00:00:00 2001
+From: arroway <stephanie@minet.net>
+Date: Sun, 19 Jun 2011 20:32:49 +0200
+Subject: [PATCH 02/11] bug fix: vq->vq_entries freed twice in
+ virtio_blk_detach()
+
+---
+ blk/virtio-blk.c |    7 +++++--
+ virtio.c         |    1 +
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/blk/virtio-blk.c b/blk/virtio-blk.c
+index fcf16e9..2b3f9c2 100755
+--- a/blk/virtio-blk.c
++++ b/blk/virtio-blk.c
+@@ -644,10 +644,13 @@ virtio_blk_detach(device_t dev)
+ 	bus_dma_tag_destroy(vsc->requests_dmat);
+ 
+ 	virtio_reset(vsc);
++
+ 	virtio_free_vq(vsc, &sc->sc_vq[0]);
+ 
+ 	/*unload and free virtqueue*/
+-	kfree(vq->vq_entries, M_DEVBUF);
++	/* bug fix */
++	// freed twice
++	//kfree(vq->vq_entries, M_DEVBUF);
+ 	bus_dmamap_unload(vq->vq_dmat, vq->vq_dmamap);
+ 	bus_dmamem_free(vq->vq_dmat, vq->vq_vaddr, vq->vq_dmamap);
+ 	bus_dma_tag_destroy(vq->vq_dmat);
+@@ -666,7 +669,7 @@ static device_method_t virtio_blk_methods[] = {
+ 	DEVMETHOD(device_probe,		virtio_blk_probe),
+ 	DEVMETHOD(device_attach,	virtio_blk_attach),
+ 	DEVMETHOD(device_detach,	virtio_blk_detach),
+-	{ 0, 0}
++	{ 0, 0 }
+ };
+ 
+ static driver_t virtio_blk_driver = {
+diff --git a/virtio.c b/virtio.c
+index 07f65e2..cca4f73 100755
+--- a/virtio.c
++++ b/virtio.c
+@@ -193,6 +193,7 @@ virtio_free_vq(struct virtio_softc *sc, struct virtqueue *vq)
+ 	 * device must be already deactivated
+ 	 * confirm the vq is empty
+ 	 */ 
++
+ 	TAILQ_FOREACH(qe, &vq->vq_freelist, qe_list) {
+ 		i++;
+ 	}
+-- 
+1.7.4.4
+

@@ -1,0 +1,153 @@
+From e995199b316004dedd92fea3d5f35b6e1bc75558 Mon Sep 17 00:00:00 2001
+From: arroway <stephanie@minet.net>
+Date: Sun, 24 Jul 2011 21:56:35 +0200
+Subject: [PATCH 06/11] write some documentation notes
+
+---
+ README |  132 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 files changed, 130 insertions(+), 2 deletions(-)
+
+diff --git a/README b/README
+index 5996708..69a69a5 100644
+--- a/README
++++ b/README
+@@ -8,6 +8,134 @@ See on gitorious: https://gitorious.org/virtio-drivers/virtio-drivers/trees/mast
+ 
+ 
+ blk/: the block device driver
+-net/: the net device driver - to be completed
+-balloon/: the memory ballooning device driver - to be created
++net/: the net device driver - BEING TESTED, DOESN'T WORK YET
++balloon/: the memory ballooning device driver - BEING TESTED, DOESN'T WORK YET
++
++
++
++Documentation
++
++Using paravirtualized drivers for KVM/Linux with DragonFly BSD guest machines
++
++On the official web page of KVM (http://www.linux-kvm.org/page/Virtio), you will find information about configuring the host machine to use virtio devices drivers. Network, block and balloon (memory ballooning) devices are supported for KVM.
++Linux kernel supports virtio devices in KVM since kernel 2.6.25.
++
++
++Here is an example of a configuration with kvm to start your guest machine:
++kvm -cpu Nehalem -k fr -m 1024 -drive file=/home/arroway/kvm/disk-virtio1.img,if=virtio,format=qcow2 -hda ~arroway/kvm/disk.img -hdb ~arroway/kvm/disk2.img -device rtl8139,netdev=mynet0 -netdev type=user,id=mynet0,net=192.168.42.0/24,restrict=n,host=192.168.42.1,hostfwd=::2200-192.168.42.15:22 -device virtio-net-pci,netdev=virtio,mac=52:54:42:42:42:42 -netdev type=user,id=virtio,net=192.168.43.0/24,restrict=n,host=192.168.43.1 -curses
++
++You can specified the cpu which is used by the guest machine with "-cpu".
++You can specified the keyboard language with "-k".
++You can choose the amount of RAM used with "-m".
++
++Then, options about the block devices and the network devices follow.
++There are three disks: the first one is a virtio block device (disk-virtio1.img), the others are classic block devices (disk.img, disk2.img).
++There are two network cards: the first one is of type rtl8139, the second one is a virtio device.
++
++"-curses" option is used if you don't want to use SDL (e.g. if you have no graphic interfaces).
++
++See man page for qemu for more detailed commands: http://linux.die.net/man/1/qemu
++and for more information about qemu http://wiki.qemu.org/
++
++
++
++To check on your system if virtio pci devices are present or not, do:
++
++# pciconf -lv
++[...]
++virtiobus0@pci0:0:5:0:    class=0x010000 card=0x00021af4 chip=0x10011af4 rev=0x00 hdr=0x00
++    vendor     = 'Red Hat, Inc'
++    device     = 'Virtio block device'
++    class      = mass storage
++    subclass   = SCSI
++
++
++At the moment, the drivers have to be manually loaded in the kernel of the guest machine, so be sure to boot on a non-virtio disk.
++
++*Creating a disk image*
++# qemu-img create -f qcow2 <image_name> <size>
++
++*Install the guest OS from a ISO image*
++#qemu-kvm -hda <image_name> -m 512 -cdrom <path to the iso image> -boot -vga std
++
++
++The virtio driver (virtio.ko) has to be loaded first. It is the parent device. It creates one child device for network, block or balloon devices. Then the appropriate device driver will have to be loaded (virtio-blk.ko, virtio-net.ko or virtio-mb.ko).
++
++e.g. :
++*loading the virtio device driver*
++# cd virtio
++# make
++# kldload -v ./virtio.ko
++
++*loading the virtio net device driver*
++# cd net
++# make
++# kldload -v ./virtio-net.ko
++
++
++
++
++* Network device driver
++
++Configuration in KVM.
++The "-net" option in qemu is deprecated. Use "netdev" or "tap" instead. http://wiki.qemu.org/Documentation/Networking
++
++-device virtio-net-pci,netdev=virtio,mac=52:54:*:*:*:* -netdev type=user,id=virtio,...
++
++If you want to specify a MAC address on the command line in qemu, it would have to begin by 52:54:*. 
++
++
++
++* Block device driver
++
++qcow2 format
++http://people.gnome.org/~markmc/qcow-image-format.html
++
++-drive file=/home/arroway/kvm/disk-virtio1.img,if=virtio,format=qcow2
++
++Before loading the block device driver in DragonFly BSD, you'll have to format your block device (UFS or Hammer) and mount it:
++# newfs -f -L disk-virtio /dev/vdb0s0
++# mount /dev/vdb0s0 my-mount-point
++
++or with Hammer FS:
++
++# newfs_hammer -f -L disk-virtio /dev/vdb0s0
++# mount_hammer /dev/vdb0s0 my-mount-point
++
++Just be careful that your Hammer partition is big enough, or it will create problems for r/w, unmount operations if the disk becomes full.
++
++
++Then load the driver:
++# cd virtio
++# make
++# kldload -v ./virtio.ko
++# cd blk
++# make
++# kldload -v ./virtio-blk.ko
++
++To unload the driver:
++First unmount the block device, or it will freeze the session and you'll have to kill the machine.
++# unmount my-mount-point
++# cd virtio/blk
++# kldunload -v ./virtio-blk.ko
++# klduload -v ./virtio.ko
++
++
++* Memory Ballooning
++
++
++
++
++Notes 
++
++* KVM and the OOM Killer
++
++If your KVM host machine runs out of LOWMEM, even if it has enough RAM and swap memory left, the OOM Killer may begin to kill applications - such as the one running your virtual guests machines.
++
++
++Dev
++
++To see debug messages: start the virtual machine in a screen
++
++
+ 
+-- 
+1.7.4.4
+

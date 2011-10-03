@@ -1,0 +1,122 @@
+From e5c80873a121f7fe2e167bd916886149cffec211 Mon Sep 17 00:00:00 2001
+From: arroway <stephanie@minet.net>
+Date: Sun, 21 Aug 2011 23:36:31 +0200
+Subject: [PATCH 08/11] merge README from master
+
+---
+ README |   51 ++++++++++++++++++++++++++++++++++++++-------------
+ 1 files changed, 38 insertions(+), 13 deletions(-)
+
+diff --git a/README b/README
+index 69a69a5..d78bbd0 100644
+--- a/README
++++ b/README
+@@ -1,28 +1,28 @@
+ This project is about porting virtio drivers for DragonFlyBSD from NetBSD source code.
+ 
+ NetBSD_code/: original code, under BSD license.
+-old_work/: previous code on virito.c and the virtio blok device driver. It is now outdated.
+ 
+ This project is forked from the work of Pratyush Kshirsagar and Tim Bisson.
+ See on gitorious: https://gitorious.org/virtio-drivers/virtio-drivers/trees/master
+ 
+ 
+ blk/: the block device driver
+-net/: the net device driver - BEING TESTED, DOESN'T WORK YET
+-balloon/: the memory ballooning device driver - BEING TESTED, DOESN'T WORK YET
++net/: the net device driver - being tested, it currently fails when executing a vioif_start, because the flag NO_NOTIFY is set in QEMU when we enqueue & commit the packets for transmission.
++balloon/: the memory ballooning device driver - being tested, the driver receives no requests when we use the QEMU monitor console to ask for some amount of memory.
+ 
+ 
+ 
+ Documentation
+ 
+-Using paravirtualized drivers for KVM/Linux with DragonFly BSD guest machines
++Using virtio paravirtualized drivers for QEMU/KVM with DragonFly BSD guest machines
+ 
+-On the official web page of KVM (http://www.linux-kvm.org/page/Virtio), you will find information about configuring the host machine to use virtio devices drivers. Network, block and balloon (memory ballooning) devices are supported for KVM.
++Virtio is supported by QEMU and KVM.
++You'll find information on the official web page of KVM (http://www.linux-kvm.org/page/Virtio) about configuring the host machine to use virtio devices drivers. Network, block and balloon (memory ballooning) devices are supported for KVM.
+ Linux kernel supports virtio devices in KVM since kernel 2.6.25.
+ 
+ 
+ Here is an example of a configuration with kvm to start your guest machine:
+-kvm -cpu Nehalem -k fr -m 1024 -drive file=/home/arroway/kvm/disk-virtio1.img,if=virtio,format=qcow2 -hda ~arroway/kvm/disk.img -hdb ~arroway/kvm/disk2.img -device rtl8139,netdev=mynet0 -netdev type=user,id=mynet0,net=192.168.42.0/24,restrict=n,host=192.168.42.1,hostfwd=::2200-192.168.42.15:22 -device virtio-net-pci,netdev=virtio,mac=52:54:42:42:42:42 -netdev type=user,id=virtio,net=192.168.43.0/24,restrict=n,host=192.168.43.1 -curses
++kvm -cpu Nehalem -k fr -m 1024 -drive file=/home/arroway/kvm/disk-virtio1.img,if=virtio,format=qcow2 -hda ~arroway/kvm/disk.img -hdb ~arroway/kvm/disk2.img -device rtl8139,netdev=mynet0 -netdev type=user,id=mynet0,net=192.168.42.0/24,restrict=n,host=192.168.42.1,hostfwd=::2200-192.168.42.15:22 -device virtio-net-pci,netdev=virtio,mac=52:54:42:42:42:42 -netdev type=user,id=virtio,net=192.168.43.0/24,restrict=n,host=192.168.43.1 -balloon virtio -nographic
+ 
+ You can specified the cpu which is used by the guest machine with "-cpu".
+ You can specified the keyboard language with "-k".
+@@ -32,7 +32,8 @@ Then, options about the block devices and the network devices follow.
+ There are three disks: the first one is a virtio block device (disk-virtio1.img), the others are classic block devices (disk.img, disk2.img).
+ There are two network cards: the first one is of type rtl8139, the second one is a virtio device.
+ 
+-"-curses" option is used if you don't want to use SDL (e.g. if you have no graphic interfaces).
++"-nographic" option is used if you don't want to use SDL (e.g. if you have no graphic interfaces). Open a SSH session to connect on the machine.
++You can also use "-curses" in a non-graphic mode, you'll don't have to open a second tab, but you won't be able to scroll up and down in your guest terminal window.
+ 
+ See man page for qemu for more detailed commands: http://linux.die.net/man/1/qemu
+ and for more information about qemu http://wiki.qemu.org/
+@@ -58,6 +59,7 @@ At the moment, the drivers have to be manually loaded in the kernel of the guest
+ *Install the guest OS from a ISO image*
+ #qemu-kvm -hda <image_name> -m 512 -cdrom <path to the iso image> -boot -vga std
+ 
++The drivers have to be in src/sys/dev/virtio
+ 
+ The virtio driver (virtio.ko) has to be loaded first. It is the parent device. It creates one child device for network, block or balloon devices. Then the appropriate device driver will have to be loaded (virtio-blk.ko, virtio-net.ko or virtio-mb.ko).
+ 
+@@ -82,15 +84,9 @@ The "-net" option in qemu is deprecated. Use "netdev" or "tap" instead. http://w
+ 
+ -device virtio-net-pci,netdev=virtio,mac=52:54:*:*:*:* -netdev type=user,id=virtio,...
+ 
+-If you want to specify a MAC address on the command line in qemu, it would have to begin by 52:54:*. 
+-
+-
+ 
+ * Block device driver
+ 
+-qcow2 format
+-http://people.gnome.org/~markmc/qcow-image-format.html
+-
+ -drive file=/home/arroway/kvm/disk-virtio1.img,if=virtio,format=qcow2
+ 
+ Before loading the block device driver in DragonFly BSD, you'll have to format your block device (UFS or Hammer) and mount it:
+@@ -123,7 +119,36 @@ First unmount the block device, or it will freeze the session and you'll have to
+ 
+ * Memory Ballooning
+ 
++-balloon virtio
++
++You can use memory ballooning to over-commit the memory resources of a guest operating system. The hypervisor may asks for some memory to the guest OS (i.e. to deflate its "balloon" of memory"). 
++
++Interesting information there: http://publib.boulder.ibm.com/infocenter/lnxinfo/v3r0m0/index.jsp?topic=/liaat/liaatbpballooning.htm
++
++
++** Using the monitor console in QEMU
++
++You can use the monitor console in qemu to get some information about the running guest machine.
++You can access it by pressing CTRL + ALT + 2 from the guest VM. Te return back to QEMU from the monitor console, press CTRL + ALT + 1.
++
++This may not be working in some cases. Here is what I did to have an access anyway. Add the following option on the command line to launch the VM:
++-monitor tcp:port, server # where port is a big number, e.g.4444
++
++It will wait a connection, so open a new tab in your terminal, or a new SSH session, and type:
++# telnet localhost 4444
++You have  now access to a QEMU monitor console. Just be careful, for closing the monitor console will kill the VM.
++
++You can get information many information from the console, and in particular some about virtio balloon (wether it is enabled or not):
++#info balloon
++
++If the balloon device is enabled, you can request an amount of memory from the command line:
++#balloon memory_in_MB
++
++
++
++
+ 
++-------------
+ 
+ 
+ Notes 
+-- 
+1.7.4.4
+
