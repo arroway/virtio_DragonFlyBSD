@@ -234,7 +234,6 @@ virtio_blk_execute(struct virtio_blk_softc *sc)
 		return r;
 	}
 
-	// pourquoi vr->nseg + 2 ?
 	r = virtio_enqueue_reserve(vsc, vq, slot, vr->nseg + 2);
 	if (r != 0) {
 		kprintf("Bad enqueue_reserve\n");
@@ -315,6 +314,7 @@ virtio_disk_close(struct dev_close_args *ap)
 	debug("%s\n", __FUNCTION__);
 	return 0;
 }
+
 static int
 virtio_disk_open(struct dev_open_args *ap)
 {
@@ -322,13 +322,13 @@ virtio_disk_open(struct dev_open_args *ap)
 	debug("%s\n", __FUNCTION__);
 	return 0;
 }
+
 static int
 virtio_disk_dump(struct dev_dump_args *ap)
 {
 	kprintf("%s\n", __FUNCTION__);
 	return 1;
 }
-
 
 static void
 virtio_blk_vq_done1(struct virtio_blk_softc *sc, struct virtio_softc *vsc,
@@ -361,7 +361,8 @@ virtio_blk_vq_done1(struct virtio_blk_softc *sc, struct virtio_softc *vsc,
 	biodone(&bp->b_bio_array[1]);
 }
 
-
+/* Interrupt defined in th attach function
+ and called from virtio_vq_intr in (virtio.c) */
 static int
 virtio_blk_vq_done(struct virtqueue *vq)
 {
@@ -527,7 +528,6 @@ virtio_blk_attach(device_t dev)
 	int qsize;
 	struct disk_info info;
 	int error;
-	debug("");
 
 	sc->dev = dev;
 	sc->sc_virtio = vsc;
@@ -538,6 +538,7 @@ virtio_blk_attach(device_t dev)
 	vsc->sc_child = dev;
 	vsc->sc_intrhand = virtio_vq_intr;
 	debug("sc_child is %p\n", vsc->sc_child);
+	
 	features = virtio_negotiate_features(vsc,
 				   (VIRTIO_BLK_F_SIZE_MAX |
 				   VIRTIO_BLK_F_SEG_MAX |
@@ -647,10 +648,6 @@ virtio_blk_detach(device_t dev)
 
 	virtio_free_vq(vsc, &sc->sc_vq[0]);
 
-	/*unload and free virtqueue*/
-	/* bug fix */
-	// freed twice
-	//kfree(vq->vq_entries, M_DEVBUF);
 	bus_dmamap_unload(vq->vq_dmat, vq->vq_dmamap);
 	bus_dmamem_free(vq->vq_dmat, vq->vq_vaddr, vq->vq_dmamap);
 	bus_dma_tag_destroy(vq->vq_dmat);

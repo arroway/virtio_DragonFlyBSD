@@ -168,9 +168,6 @@ virtio_reinit_end(struct virtio_softc *sc)
 	virtio_set_status(sc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK);
 }
 
-
-
-
 /*
  * Start/stop vq interrupt.  There is no guarantee that interrupts will
  * effectively be stopped .
@@ -205,7 +202,6 @@ virtio_init_vq(struct virtio_softc *sc, struct virtqueue *vq)
 	/* build the indirect descriptor chain */
 	if (vq->vq_indirect != NULL) {
 		struct vring_desc *vd;
-		/*foo*/
 		for (i = 0; i < vq_size; i++) {
 			vd = vq->vq_indirect;
 			vd += vq->vq_maxnsegs * i;
@@ -382,8 +378,7 @@ virtio_alloc_vq(struct virtio_softc *sc, struct virtqueue *vq, int index,
 
 	virtio_init_vq(sc, vq);
 
-	//kprintf("allocated %u byte for virtqueue %d for %s, size %d\n",
-	//	allocsize, index, name, vq_size);
+	debug("allocated %u byte for virtqueue %d for %s, size %d\n", allocsize, index, name, vq_size);
 	if (allocsize3 > 0) {
 		kprintf( "using %d byte (%d entries) indirect descriptors\n",
 			 allocsize3, maxnsegs * vq_size);
@@ -457,7 +452,7 @@ vq_sync_descs(struct virtio_softc *sc, struct virtqueue *vq, int ops)
 static void
 vq_free_entry(struct virtqueue *vq, struct vq_entry *qe)
 {
-	//kprintf("call of q_free_entry(): vq_num=%u", vq->vq_num);
+	debug("call of q_free_entry(): vq_num=%u", vq->vq_num);
 	spin_lock(&vq->vq_freelist_lock);
 	TAILQ_INSERT_TAIL(&vq->vq_freelist, qe, qe_list);
 	debug("tailq_insert_tail executed");
@@ -495,7 +490,6 @@ notify:
 		vq_sync_aring(sc, vq, BUS_DMASYNC_PREWRITE);
 		vq_sync_uring(sc, vq, BUS_DMASYNC_PREREAD);
 
-
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_avail->idx, 2,
 				BUS_SPACE_BARRIER_WRITE);
 
@@ -513,6 +507,8 @@ notify:
 		bus_space_barrier(sc->sc_iot, sc->sc_ioh, vq->vq_used->flags, 2,
 				  BUS_SPACE_BARRIER_READ);
 
+		/*This is the important line that notifies the virtio backend
+		 in qemu and eventually raises an interrupt*/
 		if (!(vq->vq_used->flags & VRING_USED_F_NO_NOTIFY)) {
 
 			bus_space_write_2(sc->sc_iot, sc->sc_ioh,
@@ -957,6 +953,7 @@ virtio_attach(device_t dev)
 
 	}
 
+	/*Attach for virtio network & memory ballooning drivers to come*/
 	if (virtio_type == PCI_PRODUCT_VIRTIO_NETWORK) {
 		child = device_add_child(dev, "virtio_net",0);
 
