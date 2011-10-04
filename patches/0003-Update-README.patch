@@ -1,0 +1,60 @@
+From a5e8d25839153959ccb290ff8b2aa8c26f4dc499 Mon Sep 17 00:00:00 2001
+From: arroway <stephanie@minet.net>
+Date: Thu, 2 Jun 2011 23:05:13 +0200
+Subject: [PATCH 03/19] Update README
+
+---
+ blk/virtio-blk.c |    2 +-
+ virtio.c         |    5 +++--
+ 3 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/blk/virtio-blk.c b/blk/virtio-blk.c
+index b617713..928d66d 100755
+--- a/blk/virtio-blk.c
++++ b/blk/virtio-blk.c
+@@ -283,7 +283,7 @@ virtio_disk_strategy(struct dev_strategy_args *ap)
+ 	vbb->bio = bio;
+ 
+ 	/*
+-	* Queue an I/O request. Enfoce that only qsize
++	* Queue an I/O request. Enforce that only qsize
+ 	* slots are used
+ 	*/
+ 	spin_lock(&sc->vbb_queue_lock);
+diff --git a/virtio.c b/virtio.c
+index 85d548e..8088d86 100755
+--- a/virtio.c
++++ b/virtio.c
+@@ -45,7 +45,6 @@
+ #include "virtiovar.h"
+ #include "virtioreg.h"
+ 
+-MODULE_VERSION(virtiobus, 0);
+ static const char *virtio_device_name[] = {
+ 	"Unknown (0)",	/* 0 */
+ 	"Network",	/* 1 */
+@@ -88,6 +87,7 @@ static int              virtio_detach(device_t dev);
+ static int              virtio_intr(void *arg);
+ static int              virtio_attach(device_t dev);
+ 
++
+ void virtio_set_status(struct virtio_softc *sc, int status)
+ {
+ 	int old = 0;
+@@ -685,7 +685,7 @@ virtio_dequeue_commit(struct virtio_softc *sc, struct virtqueue *vq, int slot)
+ 	int s = slot;
+ 
+ 	while (vd[s].flags & VRING_DESC_F_NEXT) {
+-		kprintf("vringdescnext\n");
++		//kprintf("vringdescnext\n");
+ 		s = vd[s].next;
+ 		vq_free_entry(vq, qe);
+ 		qe = &vq->vq_entries[s];
+@@ -887,3 +887,4 @@ static driver_t virtio_driver = {
+ static devclass_t virtio_devclass;
+ 
+ DRIVER_MODULE(virtiobus, pci, virtio_driver, virtio_devclass, 0, 0);
++MODULE_VERSION(virtiobus, 0);
+-- 
+1.7.4.4
+

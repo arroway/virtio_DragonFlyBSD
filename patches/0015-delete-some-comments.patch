@@ -1,0 +1,368 @@
+From 9634a3c624f0505598e8d242f6445093cf54925d Mon Sep 17 00:00:00 2001
+From: arroway <stephanie@minet.net>
+Date: Mon, 3 Oct 2011 13:07:29 +0200
+Subject: [PATCH 15/19] delete some comments
+
+---
+ blk/virtio-blk.c |  163 ++++++++++++++++++------------------------------------
+ 1 files changed, 53 insertions(+), 110 deletions(-)
+
+diff --git a/blk/virtio-blk.c b/blk/virtio-blk.c
+index 5ec8c75..7e2b4df 100755
+--- a/blk/virtio-blk.c
++++ b/blk/virtio-blk.c
+@@ -1,10 +1,3 @@
+-/*
+- * bug quand kldunload virtio-blk.ko si disuqe toujour monté
+- * pb pour umount
+- *
+- * => should be fixed now :)
+- */
+-
+  /*
+  * Copyright (c) 2010 Minoura Makoto.
+  * All rights reserved.
+@@ -30,7 +23,6 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#include <machine/inttypes.h>
+ #include <sys/param.h>
+ #include <sys/systm.h>
+ #include <sys/conf.h>
+@@ -48,7 +40,6 @@
+ #include <sys/devicestat.h>
+ #include <sys/spinlock.h>
+ #include <sys/spinlock2.h>
+-#include <sys/taskqueue.h>
+ #include <bus/pci/pcivar.h>
+ #include <bus/pci/pcireg.h>
+ 
+@@ -97,6 +88,11 @@ struct virtio_blk_req_hdr {
+ 	uint64_t	sector;
+ } __packed;
+ 
++struct virtio_blk_bio {
++	TAILQ_ENTRY(virtio_blk_bio)	vbb_list; /* free list */
++	struct bio			*bio;
++};
++
+ /* 512*virtio_blk_req_hdr.sector byte payload and 1 byte status follows */
+ /*
+  * ld_virtiovar:
+@@ -118,10 +114,9 @@ struct virtio_blk_req {
+ struct virtio_blk_softc {
+ 	device_t		dev;
+ 	struct virtio_softc	*sc_virtio;
+-	struct virtqueue	sc_vq[1];
+-	int			sc_readonly;
++	struct virtqueue	sc_vq[1]; 
++	int			sc_readonly; 
+ 	int			maxxfersize;
+-	int			in_use;
+ 
+ 	/*Block Device Specific*/
+ 	cdev_t			cdev;
+@@ -131,12 +126,8 @@ struct virtio_blk_softc {
+ 	struct virtio_blk_req	*sc_reqs;
+ 
+ 	/*throttle outstanding ios*/
+-	TAILQ_HEAD(, bio)	bio_queue;
+-	struct spinlock		bio_queue_lock;
+-
+-	/* taskq to dispatch outstanding IOs */
+-	struct taskqueue	*bio_taskq;
+-	struct task		execute_task;
++	TAILQ_HEAD(, virtio_blk_bio)	vbb_queue;	
++	struct spinlock		vbb_queue_lock;
+ };
+ 
+ /*
+@@ -178,8 +169,8 @@ map_payload(void *arg, bus_dma_segment_t *segs, int nseg, int error)
+ 	struct virtio_blk_req *vr = (struct virtio_blk_req *) arg;
+ 	vr->segs = segs;
+ 	vr->nseg = nseg;
+-	debug("%p:%p addr:%"PRIx64", len:%"PRIu64"\n", segs, vr->segs,
+-	      (uint64_t)vr->segs[0].ds_addr, (uint64_t)vr->segs[0].ds_len);
++	debug("%p:%p addr:%lu, len:%lu\n", segs,vr->segs,vr->segs[0].ds_addr,
++	      vr->segs[0].ds_len);
+ }
+ 
+ static int
+@@ -188,7 +179,8 @@ virtio_blk_execute(struct virtio_blk_softc *sc)
+ 	struct virtqueue *vq = &sc->sc_vq[0];
+ 	struct virtio_softc *vsc = sc->sc_virtio;
+ 	struct bio* bio;
+-	struct buf *bp;
++	struct virtio_blk_bio* vbb = NULL;
++	struct buf *bp; 
+ 	int isread;
+ 	int r;
+ 	int slot;
+@@ -196,30 +188,32 @@ virtio_blk_execute(struct virtio_blk_softc *sc)
+ 
+ 
+ 
+-	spin_lock(&sc->bio_queue_lock);
+-	bio = TAILQ_FIRST(&sc->bio_queue);
+-	if (bio == NULL) {
+-		spin_unlock(&sc->bio_queue_lock);
++	spin_lock(&sc->vbb_queue_lock);     
++	vbb = TAILQ_FIRST(&sc->vbb_queue);
++	if (vbb == NULL) {
++		spin_unlock(&sc->vbb_queue_lock);
+ 		return 1;
+ 	}
+-	TAILQ_REMOVE(&sc->bio_queue, bio, bio_act);
+-	spin_unlock(&sc->bio_queue_lock);
++	TAILQ_REMOVE(&sc->vbb_queue, vbb, vbb_list);
++	spin_unlock(&sc->vbb_queue_lock);
+ 
+ 	r = virtio_enqueue_prep(vsc, vq, &slot);
+ 	if (r != 0) {
+ 		kprintf("%u slots\n", slot);
+ 		kprintf("virtio_blk_execute: no slot available in vq.\n We requeue.\n ");
+ 		/* We need to requeue this guy as there was no slot*/
+-		spin_lock(&sc->bio_queue_lock);
+-		TAILQ_INSERT_HEAD(&sc->bio_queue, bio, bio_act);
+-		spin_unlock(&sc->bio_queue_lock);
++		spin_lock(&sc->vbb_queue_lock);
++		TAILQ_INSERT_TAIL(&sc->vbb_queue, vbb, vbb_list);
++		spin_unlock(&sc->vbb_queue_lock);
+ 
+ 		return r;
+ 	}
+ 
++	bio = vbb->bio;
++	//kfree(vbb, M_DEVBUF);
+ 	bp = bio->bio_buf;
+ 	vr = &sc->sc_reqs[slot];
+-	isread = (bp->b_cmd & BUF_CMD_READ);
++	isread= (bp->b_cmd & BUF_CMD_READ);
+ 	if (sc->sc_readonly && !isread) {
+ 		kprintf("is read only:%u but op is not\n", sc->sc_readonly);
+ 		/*XXX: free slot here?*/
+@@ -245,13 +239,15 @@ virtio_blk_execute(struct virtio_blk_softc *sc)
+ 	if (r != 0) {
+ 		kprintf("Bad enqueue_reserve\n");
+ 
+-		//we enqueue the bio again
+-		spin_lock(&sc->bio_queue_lock);
+-		TAILQ_INSERT_HEAD(&sc->bio_queue, bio, bio_act);
+-		spin_unlock(&sc->bio_queue_lock);
++		//we enqueue again vbb in vbb_list
++		spin_lock(&sc->vbb_queue_lock);
++		TAILQ_INSERT_TAIL(&sc->vbb_queue, vbb, vbb_list);
++		spin_unlock(&sc->vbb_queue_lock);
+ 		return r;
+ 	}
+ 
++	kfree(vbb, M_DEVBUF);
++
+ 	vr->vr_bp = bp;
+ 	vr->vr_hdr.type = isread?VIRTIO_BLK_T_IN:VIRTIO_BLK_T_OUT;
+ 	vr->vr_hdr.ioprio = 0;
+@@ -276,24 +272,6 @@ virtio_blk_execute(struct virtio_blk_softc *sc)
+ 
+ }
+ 
+-static void
+-virtio_blk_execute_task(void *arg, int pending __unused)
+-{
+-	struct virtio_blk_softc *sc = (struct virtio_blk_softc *)arg;
+-	int error;
+-
+-	while (!TAILQ_EMPTY(&sc->bio_queue)) {
+-		if ((error = virtio_blk_execute(sc)) != 0)
+-			break;
+-
+-		--pending;
+-	}
+-
+-	/* If the TAILQ is still not empty enqueue the task again */
+-	if (!TAILQ_EMPTY(&sc->bio_queue))
+-		taskqueue_enqueue(sc->bio_taskq, &sc->execute_task);
+-}
+-
+ /*  Handle an I/O request. */
+ static int
+ virtio_disk_strategy(struct dev_strategy_args *ap)
+@@ -303,7 +281,6 @@ virtio_disk_strategy(struct dev_strategy_args *ap)
+ 	struct bio *bio = ap->a_bio;
+ 	struct buf *bp = bio->bio_buf;
+ 	struct virtio_blk_softc *sc = dev->si_drv1;
+-	int error;
+ 
+ 	if (bp->b_bcount == 0) {
+ 		debug("bp b count is 0\n");
+@@ -312,60 +289,44 @@ virtio_disk_strategy(struct dev_strategy_args *ap)
+ 		return(0);
+ 	}
+ 
++	struct virtio_blk_bio * vbb = 
++	kmalloc(sizeof(struct virtio_blk_bio),M_DEVBUF, 0);
++	vbb->bio = bio;
++
+ 	/*
+ 	* Queue an I/O request. Enforce that only qsize
+ 	* slots are used
+ 	*/
+-	spin_lock(&sc->bio_queue_lock);
+-	TAILQ_INSERT_TAIL(&sc->bio_queue, bio, bio_act);
+-	spin_unlock(&sc->bio_queue_lock);
+-
+-
+-	if ((error = virtio_blk_execute(sc)) != 0) {
+-		/*
+-		 * when dispatching fails, we need to make another
+-		 * attempt at some point. Simply calling blk_execute
+-		 * from the done() routine is not good enough.
+-		 */
+-		taskqueue_enqueue(sc->bio_taskq, &sc->execute_task);
+-	}
++	spin_lock(&sc->vbb_queue_lock);
++	TAILQ_INSERT_TAIL(&sc->vbb_queue, vbb, vbb_list);
++	spin_unlock(&sc->vbb_queue_lock);
++
+ 
+-	return(0);
++	virtio_blk_execute(sc);
++	return(0); 
+ }
+ 
+ static int
+ virtio_disk_close(struct dev_close_args *ap)
+ {
+-	cdev_t dev = ap->a_head.a_dev;
+-	struct virtio_blk_softc *sc = dev->si_drv1;
+ 
++	//decr cdev->usecount
++	//in detach: only unload if the counter is = 0
+ 	debug("%s\n", __FUNCTION__);
+-
+-	sc->in_use = 0;
+-
+ 	return 0;
+ }
+-
+ static int
+ virtio_disk_open(struct dev_open_args *ap)
+ {
+-	cdev_t dev = ap->a_head.a_dev;
+-	struct virtio_blk_softc *sc = dev->si_drv1;
+-
++	//incr cdev->usecount
+ 	debug("%s\n", __FUNCTION__);
+-
+-	sc->in_use = 1;
+-
+ 	return 0;
+ }
+-
+ static int
+ virtio_disk_dump(struct dev_dump_args *ap)
+ {
+-	/* XXX: This still needs to be implemented! */
+-	kprintf("virtio disks don't support dumping (yet)\n");
+-
+-	return EINVAL;
++	kprintf("%s\n", __FUNCTION__);
++	return 1;
+ }
+ 
+ 
+@@ -413,7 +374,7 @@ again:
+ 	if (virtio_dequeue(vsc, vq, &slot, NULL)) {
+ 		int empty;
+ 
+-		empty = TAILQ_EMPTY(&sc->bio_queue);
++		empty = TAILQ_EMPTY(&sc->vbb_queue); 
+ 		if (!empty) {
+ 			virtio_blk_execute(sc);
+ 		}
+@@ -422,7 +383,7 @@ again:
+ 	r = 1;
+ 
+ 	virtio_blk_vq_done1(sc, vsc, vq, slot);
+-	goto again;
++	goto again; 
+ 
+ }
+ 
+@@ -556,7 +517,7 @@ virtio_blk_probe(device_t dev)
+ }
+ 
+ 
+-static int
++static int 
+ virtio_blk_attach(device_t dev)
+ {
+ 	struct virtio_blk_softc *sc = device_get_softc(dev);
+@@ -568,7 +529,6 @@ virtio_blk_attach(device_t dev)
+ 	int error;
+ 	debug("");
+ 
+-	sc->in_use = 0;
+ 	sc->dev = dev;
+ 	sc->sc_virtio = vsc;
+ 
+@@ -642,25 +602,13 @@ virtio_blk_attach(device_t dev)
+ 	/* attach a generic disk device to ourselves */
+ 	sc->cdev = disk_create(device_get_unit(dev), &sc->disk,	&vbd_disk_ops);
+ 
+-	TAILQ_INIT(&sc->bio_queue);
+-	spin_init(&sc->bio_queue_lock);
++	TAILQ_INIT(&sc->vbb_queue);
++	spin_init(&sc->vbb_queue_lock);
++
+ 
+ 	sc->cdev->si_drv1 = sc;
+ 	disk_setdiskinfo(&sc->disk, &info);
+ 
+-	sc->bio_taskq = taskqueue_create("viodisktq", M_INTWAIT,
+-	    taskqueue_thread_enqueue, &sc->bio_taskq);
+-	if (sc->bio_taskq == NULL) {
+-		debug("Could not create taskq");
+-		devstat_remove_entry(&sc->stats);
+-		disk_destroy(&sc->disk);
+-		goto err;
+-	}
+-
+-	taskqueue_start_threads(&sc->bio_taskq, 1, TDPRI_KERN_DAEMON, -1,
+-	    "%s taskq", device_get_name(dev));
+-
+-	TASK_INIT(&sc->execute_task, 0, virtio_blk_execute_task, sc);
+ 
+ 	virtio_set_status(vsc, VIRTIO_CONFIG_DEVICE_STATUS_DRIVER_OK);
+ 
+@@ -680,10 +628,6 @@ virtio_blk_detach(device_t dev)
+ 	struct virtqueue *vq = &sc->sc_vq[0];
+ 	int i;
+ 
+-	/* XXX: Disk is still in use, don't allow removal */
+-	if (sc->in_use)
+-		return EBUSY;
+-
+ 	for (i=0; i<sc->sc_vq[0].vq_num; i++) {
+ 		struct virtio_blk_req *vr = &sc->sc_reqs[i]; 
+ 
+@@ -692,6 +636,7 @@ virtio_blk_detach(device_t dev)
+ 		bus_dmamap_unload(vsc->requests_dmat, vr->cmd_dmap);
+ 		bus_dmamap_destroy(vsc->requests_dmat, vr->cmd_dmap);
+ 	}
++
+ 	bus_dmamap_unload(vsc->requests_dmat, vsc->cmds_dmamap);
+ 	bus_dmamem_free(vsc->requests_dmat, sc->sc_reqs, vsc->cmds_dmamap);
+ 
+@@ -716,8 +661,6 @@ virtio_blk_detach(device_t dev)
+ 	disk_destroy(&sc->disk);
+ 	devstat_remove_entry(&sc->stats);
+ 
+-	taskqueue_drain(sc->bio_taskq, &sc->execute_task);
+-	taskqueue_free(sc->bio_taskq);
+ 
+ 	return 0;
+ }
+-- 
+1.7.4.4
+

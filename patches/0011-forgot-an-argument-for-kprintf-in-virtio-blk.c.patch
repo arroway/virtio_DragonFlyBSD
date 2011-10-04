@@ -1,0 +1,25 @@
+From 0cf39ff2008df91730e45c51484b8251d355b904 Mon Sep 17 00:00:00 2001
+From: arroway <stephanie@minet.net>
+Date: Sun, 19 Jun 2011 21:02:22 +0200
+Subject: [PATCH 11/19] forgot an argument for kprintf in virtio-blk.c
+
+---
+ blk/virtio-blk.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/blk/virtio-blk.c b/blk/virtio-blk.c
+index d00ada5..d6d1d8e 100755
+--- a/blk/virtio-blk.c
++++ b/blk/virtio-blk.c
+@@ -514,7 +514,7 @@ virtio_blk_probe(device_t dev)
+ 	if (pci_read_config(pdev, PCIR_SUBDEV_0, 2) == PCI_PRODUCT_VIRTIO_BLOCK) {
+ 		debug("parent:%p is block\n", pdev);
+ 	} else {
+-		debug("parent:%p is not block\n");
++		debug("parent:%p is not block\n", pdev);
+ 		return 1;
+ 	}
+ 
+-- 
+1.7.4.4
+

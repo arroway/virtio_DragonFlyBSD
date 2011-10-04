@@ -1,0 +1,41 @@
+From 5916bedb88e2f696954618094b4aa1cddd731ade Mon Sep 17 00:00:00 2001
+From: arroway <stephanie@minet.net>
+Date: Sun, 19 Jun 2011 20:34:32 +0200
+Subject: [PATCH 10/19] ..
+
+---
+ blk/virtio-blk.c     |    5 +++
+ virtiovar.h          |    2 +-
+ 4 files changed, 7 insertions(+), 98 deletions(-)
+ delete mode 100755 net/virtio-net.c
+
+diff --git a/blk/virtio-blk.c b/blk/virtio-blk.c
+index 2b3f9c2..d00ada5 100755
+--- a/blk/virtio-blk.c
++++ b/blk/virtio-blk.c
+@@ -1,4 +1,9 @@
+ /*
++ * bug quand kldunload virtio-blk.ko si disuqe toujour monté
++ * pb pour umount
++ * */
++
++ /*
+  * Copyright (c) 2010 Minoura Makoto.
+  * All rights reserved.
+  *
+diff --git a/virtiovar.h b/virtiovar.h
+index 52303d7..1162b11 100755
+--- a/virtiovar.h
++++ b/virtiovar.h
+@@ -64,7 +64,7 @@
+ #define _VIRTIOVAR_H_
+ 
+ /* change to VIRTIO_DEBUG for dmesg info*/
+-#define NO_VIRTIO_DEBUG 
++#define VIRTIO_DEBUG
+ 
+ #ifdef VIRTIO_DEBUG 
+ 	#define debug(fmt, args...) do { kprintf("%s: " fmt, __func__ , ##args); } \
+-- 
+1.7.4.4
+
